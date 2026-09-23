@@ -134,3 +134,47 @@
     animation: none;
   }
 }
+
+
+/* Estilos para inputs de fecha/hora */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  min-height: 42px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* En móvil, asegurar que no se desborde */
+@media (max-width: 640px) {
+  input[type="datetime-local"],
+  input[type="date"],
+  input[type="time"] {
+    font-size: 16px; /* Evita el zoom automático en iOS */
+    padding: 0.65rem 0.75rem;
+  }
+}
+
+/* Modo oscuro: hacer que el icono del calendario sea visible */
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}

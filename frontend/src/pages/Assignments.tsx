@@ -4,8 +4,7 @@ import { CustomSelect } from '../components/CustomSelect';
 import { Pagination } from '../components/Pagination';
 import { SectionHeader } from '../components/SectionHeader';
 import ReactDOM from 'react-dom';
-
-const API_BASE = 'http://localhost:1574';
+import { API_URL } from '../config';
 
 type AssignmentItem = {
   id?: string | number;
@@ -19,6 +18,9 @@ type AssignmentItem = {
   status: string;
 };
 
+type SortField = 'participant' | 'fitbit' | 'start_date' | 'estimated_end_date' | 'real_end_date' | 'status';
+type SortDirection = 'asc' | 'desc';
+
 const Assignments: React.FC = () => {
   const { t } = useTranslation();
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -28,10 +30,15 @@ const Assignments: React.FC = () => {
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [sortField, setSortField] = useState<SortField>('participant');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentItem | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [editParticipantCode, setEditParticipantCode] = useState('');
+  const [editFitbitCode, setEditFitbitCode] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editEstimatedEndDate, setEditEstimatedEndDate] = useState('');
   const [editRealEndDate, setEditRealEndDate] = useState('');
@@ -54,7 +61,7 @@ const Assignments: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const loadAssignments = () => {
-    fetch(`${API_BASE}/api/assignments/`, { credentials: 'include' })
+    fetch(`${API_URL}/api/assignments/`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
@@ -69,8 +76,8 @@ const Assignments: React.FC = () => {
   const loadDropdownLists = async () => {
     try {
       const [partRes, fitRes] = await Promise.all([
-        fetch(`${API_BASE}/api/participants/list/`, { credentials: 'include' }),
-        fetch(`${API_BASE}/api/fitbits/list/`, { credentials: 'include' })
+        fetch(`${API_URL}/api/participants/list/`, { credentials: 'include' }),
+        fetch(`${API_URL}/api/fitbits/list/`, { credentials: 'include' })
       ]);
       if (partRes.ok) {
         const partData = await partRes.json();
@@ -113,6 +120,16 @@ const Assignments: React.FC = () => {
     return 'N/A';
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -120,7 +137,7 @@ const Assignments: React.FC = () => {
     setSubmitSuccess(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/assignments/create/`, {
+      const response = await fetch(`${API_URL}/api/assignments/create/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -166,12 +183,14 @@ const Assignments: React.FC = () => {
     setEditError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/assignments/update/`, {
+      const response = await fetch(`${API_URL}/api/assignments/update/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedAssignment.id,
+          participant_code: editParticipantCode.trim(),
+          fitbit_code: editFitbitCode.trim(),
           start_date: editStartDate,
           estimated_end_date: editEstimatedEndDate || null,
           real_end_date: editRealEndDate || null,
@@ -206,14 +225,61 @@ const Assignments: React.FC = () => {
     }
   };
 
-  const filtered = assignments.filter((item) => {
-    const pCode = getParticipantCode(item).toLowerCase();
-    const fCode = getFitbitCode(item).toLowerCase();
-    const statusStr = item.status ? item.status.toLowerCase() : '';
-    const searchLower = query.toLowerCase();
+  const filtered = assignments
+    .filter((item) => {
+      const pCode = getParticipantCode(item).toLowerCase();
+      const fCode = getFitbitCode(item).toLowerCase();
+      const statusStr = item.status ? item.status.toLowerCase() : '';
+      const searchLower = query.toLowerCase();
 
-    return pCode.includes(searchLower) || fCode.includes(searchLower) || statusStr.includes(searchLower);
-  });
+      return pCode.includes(searchLower) || fCode.includes(searchLower) || statusStr.includes(searchLower);
+    })
+    .sort((a, b) => {
+      const codeA = getParticipantCode(a);
+      const codeB = getParticipantCode(b);
+
+      // Regla especial: 'Piloto_001' siempre va arriba del todo (si estamos ordenando por participante)
+      if (sortField === 'participant') {
+        if (codeA === 'Piloto_001') return -1;
+        if (codeB === 'Piloto_001') return 1;
+      }
+
+      let valA: any = '';
+      let valB: any = '';
+
+      switch (sortField) {
+        case 'participant':
+          valA = codeA;
+          valB = codeB;
+          break;
+        case 'fitbit':
+          valA = getFitbitCode(a);
+          valB = getFitbitCode(b);
+          break;
+        case 'start_date':
+          valA = a.start_date ? new Date(a.start_date).getTime() : 0;
+          valB = b.start_date ? new Date(b.start_date).getTime() : 0;
+          break;
+        case 'estimated_end_date':
+          valA = a.estimated_end_date ? new Date(a.estimated_end_date).getTime() : 0;
+          valB = b.estimated_end_date ? new Date(b.estimated_end_date).getTime() : 0;
+          break;
+        case 'real_end_date':
+          valA = a.real_end_date ? new Date(a.real_end_date).getTime() : 0;
+          valB = b.real_end_date ? new Date(b.real_end_date).getTime() : 0;
+          break;
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+    });
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginatedAssignments = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -273,12 +339,72 @@ const Assignments: React.FC = () => {
             <table className="min-w-full table-fixed border-collapse text-left">
               <thead>
                 <tr className="bg-[#DCEBE1]/60 dark:bg-senda-darkborder/80 text-senda-primary dark:text-senda-accent uppercase text-[10px] tracking-wider">
-                  <th className="w-[18%] px-6 py-4 font-bold rounded-l-2xl">{t('Participants Resource')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Fitbit')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Start Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Estimated End Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Real End Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold rounded-r-2xl">{t('Status')}</th>
+                  <th
+                    onClick={() => handleSort('participant')}
+                    className="w-[18%] px-6 py-4 font-bold rounded-l-2xl cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Participants Resource')}
+                      {sortField === 'participant' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('fitbit')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Fitbit')}
+                      {sortField === 'fitbit' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('start_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Start Date')}
+                      {sortField === 'start_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('estimated_end_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Estimated End Date')}
+                      {sortField === 'estimated_end_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('real_end_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Real End Date')}
+                      {sortField === 'real_end_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('status')}
+                    className="w-[18%] px-6 py-4 font-bold rounded-r-2xl cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Status')}
+                      {sortField === 'status' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
                 </tr>
               </thead>
 
@@ -293,6 +419,8 @@ const Assignments: React.FC = () => {
                       onClick={() => {
                         setSelectedAssignment(item);
                         setIsEditing(false);
+                        setEditParticipantCode(getParticipantCode(item));
+                        setEditFitbitCode(getFitbitCode(item));
                         setEditStartDate(toLocalDateTimeInput(item.start_date));
                         setEditEstimatedEndDate(toLocalDateTimeInput(item.estimated_end_date));
                         setEditRealEndDate(toLocalDateTimeInput(item.real_end_date));
@@ -371,20 +499,8 @@ const Assignments: React.FC = () => {
       </div>
 
       {isModalOpen && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-[640px] rounded-[28px] bg-senda-light dark:bg-senda-card p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
-
-            {/* Decoración: blobs difuminados */}
-            <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#DCEBE1] opacity-70 blur-3xl dark:bg-[#163A29]/40" />
-            <div className="pointer-events-none absolute -bottom-16 -left-12 h-40 w-40 rounded-full bg-[#E7F1E9] opacity-80 blur-3xl dark:bg-[#153426]/30" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.05]"
-              style={{
-                backgroundImage: 'linear-gradient(#1D5A3D 1px, transparent 1px), linear-gradient(90deg, #1D5A3D 1px, transparent 1px)',
-                backgroundSize: '26px 26px',
-              }}
-            />
-
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+          <div className="relative w-full max-w-[640px] max-h-[90vh] overflow-y-auto rounded-[28px] bg-senda-light dark:bg-senda-card p-5 sm:p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
             <div className="relative">
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -397,9 +513,9 @@ const Assignments: React.FC = () => {
               </button>
 
               {/* Icono con punto de estado */}
-              <div className="mb-4 flex justify-center">
-                <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder shadow-[0_10px_24px_rgba(29,90,61,0.14)]">
-                  <svg className="h-7 w-7 text-senda-primary dark:text-senda-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mb-3 sm:mb-4 flex justify-center">
+                <div className="relative flex h-[50px] w-[50px] sm:h-[58px] sm:w-[58px] items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder shadow-[0_10px_24px_rgba(29,90,61,0.14)]">
+                  <svg className="h-6 w-6 sm:h-7 sm:w-7 text-senda-primary dark:text-senda-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                   <span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border-[3px] border-senda-light dark:border-senda-card bg-[#4FA477]" />
@@ -407,17 +523,17 @@ const Assignments: React.FC = () => {
               </div>
 
               <h2
-                className="mt-1.5 mb-1 text-center text-[20px] font-semibold text-senda-main dark:text-white"
+                className="mt-1.5 mb-1 text-center text-lg sm:text-[20px] font-semibold text-senda-main dark:text-white"
                 style={{ fontFamily: 'Fraunces, serif' }}
               >
                 {t('New Assignment')}
               </h2>
-              <p className="mb-5 text-center text-xs leading-relaxed text-[#708077] dark:text-[#9AA093]">
+              <p className="mb-4 sm:mb-5 text-center text-[11px] sm:text-xs leading-relaxed text-[#708077] dark:text-[#9AA093]">
                 {t('New Assignment Subtitle')}
               </p>
 
               <form onSubmit={handleCreateAssignment} className="space-y-3.5" autoComplete="off">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5">
                   <div>
                     <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
                       {t('Select Participant Label')}
@@ -461,7 +577,7 @@ const Assignments: React.FC = () => {
                       value={newStartDate}
                       onChange={(e) => setNewStartDate(e.target.value)}
                       required
-                      className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3.5 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer accent-[#1F5340] dark:accent-[#6FBE96]"
+                      className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
 
@@ -473,7 +589,7 @@ const Assignments: React.FC = () => {
                       type="datetime-local"
                       value={newEstimatedEndDate}
                       onChange={(e) => setNewEstimatedEndDate(e.target.value)}
-                      className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3.5 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer accent-[#1F5340] dark:accent-[#6FBE96]"
+                      className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
                 </div>
@@ -486,7 +602,7 @@ const Assignments: React.FC = () => {
                     type="datetime-local"
                     value={newRealEndDate}
                     onChange={(e) => setNewRealEndDate(e.target.value)}
-                    className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3.5 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary"
+                    className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
                   />
                 </div>
 
@@ -522,40 +638,28 @@ const Assignments: React.FC = () => {
       )}
 
       {selectedAssignment && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-xl rounded-[28px] bg-senda-light dark:bg-senda-card p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
-
-            {/* Decoración: blobs difuminados */}
-            <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#DCEBE1] opacity-70 blur-3xl dark:bg-[#163A29]/40" />
-            <div className="pointer-events-none absolute -bottom-16 -left-12 h-40 w-40 rounded-full bg-[#E7F1E9] opacity-80 blur-3xl dark:bg-[#153426]/30" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.05]"
-              style={{
-                backgroundImage: 'linear-gradient(#1D5A3D 1px, transparent 1px), linear-gradient(90deg, #1D5A3D 1px, transparent 1px)',
-                backgroundSize: '26px 26px',
-              }}
-            />
-
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[28px] bg-senda-light dark:bg-senda-card p-5 sm:p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
             <div className="relative">
-              <div className="mb-6 flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder text-senda-primary dark:text-senda-accent">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mb-4 sm:mb-6 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder text-senda-primary dark:text-senda-accent">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-xl font-extrabold text-senda-main dark:text-white truncate" style={{ fontFamily: 'Fraunces, serif' }}>
                       {isEditing ? t('Edit Assignment') : t('Assignment Detail')}
                     </h2>
-                    <p className="text-xs text-[#6B6F66] dark:text-[#9AA093]">
+                    <p className="text-[10px] sm:text-xs text-[#6B6F66] dark:text-[#9AA093] truncate">
                       {isEditing ? t('Edit Assignment Subtitle') : t('Assignment Detail Subtitle')}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => { setSelectedAssignment(null); setIsEditing(false); }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-slate-300 hover:bg-senda-border dark:hover:bg-slate-700 cursor-pointer transition"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-slate-300 hover:bg-senda-border dark:hover:bg-slate-700 cursor-pointer transition"
                 >
                   ✕
                 </button>
@@ -563,39 +667,39 @@ const Assignments: React.FC = () => {
 
               {!isEditing ? (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Participants Resource')}</span>
                       <span className="text-sm font-bold text-senda-main dark:text-white">{getParticipantCode(selectedAssignment)}</span>
                     </div>
 
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Fitbit')}</span>
                       <span className="text-sm font-bold text-emerald-900 dark:text-emerald-400">{getFitbitCode(selectedAssignment)}</span>
                     </div>
 
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Start Date')}</span>
                       <span className="text-xs font-semibold text-senda-main dark:text-slate-200">
                         {selectedAssignment.start_date ? new Date(selectedAssignment.start_date).toLocaleString('es-ES') : '—'}
                       </span>
                     </div>
 
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Estimated End Date')}</span>
                       <span className="text-xs font-semibold text-senda-main dark:text-slate-100">
                         {selectedAssignment.estimated_end_date ? new Date(selectedAssignment.estimated_end_date).toLocaleString('es-ES') : '—'}
                       </span>
                     </div>
 
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Real End Date')}</span>
                       <span className="text-xs font-semibold text-senda-main dark:text-slate-100">
                         {selectedAssignment.real_end_date ? new Date(selectedAssignment.real_end_date).toLocaleString('es-ES') : t('In Progress')}
                       </span>
                     </div>
 
-                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                    <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                       <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Status')}</span>
                       <div>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${selectedAssignment.status?.toLowerCase() === 'active'
@@ -616,13 +720,13 @@ const Assignments: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-senda-border dark:border-senda-darkborder">
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 pt-3 sm:pt-2 border-t border-senda-border dark:border-senda-darkborder">
                     <button
                       onClick={async () => {
                         if (!selectedAssignment || !selectedAssignment.id) return;
                         if (!confirm(`${t('Delete Assignment Confirmation')} ${getParticipantCode(selectedAssignment)}?`)) return;
                         try {
-                          const resp = await fetch(`${API_BASE}/api/assignments/delete/`, {
+                          const resp = await fetch(`${API_URL}/api/assignments/delete/`, {
                             method: 'POST',
                             credentials: 'include',
                             headers: { 'Content-Type': 'application/json' },
@@ -639,7 +743,7 @@ const Assignments: React.FC = () => {
                           alert(t('Server connection error'));
                         }
                       }}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-5 py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -650,13 +754,13 @@ const Assignments: React.FC = () => {
                     <div className="flex w-full sm:w-auto gap-3">
                       <button
                         onClick={() => setSelectedAssignment(null)}
-                        className="flex-1 sm:flex-none rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-5 py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                        className="flex-1 sm:flex-none rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
                       >
                         {t('Close')}
                       </button>
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-2xl bg-senda-primary hover:bg-[#184232] dark:bg-senda-accent dark:text-senda-dark dark:hover:bg-[#59a67e] px-5 py-3 text-xs font-bold text-white transition cursor-pointer shadow-md"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-2xl bg-senda-primary hover:bg-[#184232] dark:bg-senda-accent dark:text-senda-dark dark:hover:bg-[#59a67e] px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-white transition cursor-pointer shadow-md"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -668,9 +772,30 @@ const Assignments: React.FC = () => {
                 </>
               ) : (
                 <form onSubmit={handleUpdateAssignment} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3 text-sm text-senda-main dark:text-slate-300 bg-senda-light dark:bg-senda-dark p-4 rounded-2xl border border-senda-border dark:border-senda-darkborder">
-                    <div><span className="text-[11px] text-[#6B6F66] dark:text-[#9AA093] block">{t('Participants Resource')}</span><strong className="text-senda-main dark:text-white">{getParticipantCode(selectedAssignment)}</strong></div>
-                    <div><span className="text-[11px] text-[#6B6F66] dark:text-[#9AA093] block">{t('Fitbit')}</span><strong className="text-blue-600 dark:text-blue-400">{getFitbitCode(selectedAssignment)}</strong></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] mb-1">{t('Select Participant Label')}</label>
+                      <div className="rounded-xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 py-1.5">
+                        <CustomSelect
+                          value={editParticipantCode}
+                          onChange={(val) => setEditParticipantCode(String(val))}
+                          options={participantsList.map((code) => ({ label: code, value: code }))}
+                          width="w-full"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] mb-1">{t('Select Fitbit Label')}</label>
+                      <div className="rounded-xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 py-1.5">
+                        <CustomSelect
+                          value={editFitbitCode}
+                          onChange={(val) => setEditFitbitCode(String(val))}
+                          options={fitbitsList.map((code) => ({ label: code, value: code }))}
+                          width="w-full"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -680,7 +805,7 @@ const Assignments: React.FC = () => {
                       value={editStartDate}
                       onChange={(e) => setEditStartDate(e.target.value)}
                       required
-                      className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary"
+                      className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
 
@@ -690,7 +815,7 @@ const Assignments: React.FC = () => {
                       type="datetime-local"
                       value={editEstimatedEndDate}
                       onChange={(e) => setEditEstimatedEndDate(e.target.value)}
-                      className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary"
+                      className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
 
@@ -700,7 +825,7 @@ const Assignments: React.FC = () => {
                       type="datetime-local"
                       value={editRealEndDate}
                       onChange={(e) => setEditRealEndDate(e.target.value)}
-                      className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary"
+                      className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 text-xs text-senda-main dark:text-white outline-none focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
 
@@ -710,14 +835,14 @@ const Assignments: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsEditing(false)}
-                      className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-5 py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                      className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
                     >
                       {t('Cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={editSubmitting}
-                      className="rounded-2xl bg-senda-primary hover:bg-[#184232] dark:bg-senda-accent dark:text-senda-dark dark:hover:bg-[#59a67e] px-5 py-3 text-xs font-bold text-white transition disabled:opacity-60 cursor-pointer shadow-md"
+                      className="rounded-2xl bg-senda-primary hover:bg-[#184232] dark:bg-senda-accent dark:text-senda-dark dark:hover:bg-[#59a67e] px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-white transition disabled:opacity-60 cursor-pointer shadow-md"
                     >
                       {editSubmitting ? t('Processing') : t('Save Changes')}
                     </button>

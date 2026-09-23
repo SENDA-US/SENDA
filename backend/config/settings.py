@@ -21,12 +21,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-mj4mns)t(&+*5=l8dnxjt%trj-c@bxtufigxw#do)rt(pgcv_+'
+SECRET_KEY = config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG =config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS_STRING = config('ALLOWED_HOSTS', default='')
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',') if host.strip()]
 
 
 # Application definition
@@ -43,9 +44,7 @@ INSTALLED_APPS = [
     #'django_crontab',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5174",
-]
+CORS_ALLOWED_ORIGINS = [config('FRONTEND_URL'), ]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -89,8 +88,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('DB_NAME'),
+	'USER': config('DB_USER'),
+	'PASSWORD': config('DB_PASSWORD'),
+	'HOST': config('DB_HOST'),
+	'PORT': config('DB_PORT'),
     }
 }
 
@@ -131,15 +134,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-from decouple import config
-
-SECRET_KEY = config("SECRET_KEY")
-DEBUG = config("DEBUG", cast=bool)
-
-
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0') 
-
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULE = {
     'sincronizar-datos-cada-5min': {
         'task': 'google_health.tasks.sync_all_users_data',
@@ -148,35 +144,11 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 
-EMAIL_BACKEND = config(
-    'EMAIL_BACKEND',
-    default='django.core.mail.backends.smtp.EmailBackend'
-)
-
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST')
-
-EMAIL_PORT = config(
-    'EMAIL_PORT',
-    cast=int
-)
-
-EMAIL_USE_SSL = config(
-    'EMAIL_USE_SSL',
-    cast=bool,
-    default=True
-)
-
-EMAIL_USE_TLS = config(
-    'EMAIL_USE_TLS',
-    cast=bool,
-    default=False
-)
-
+EMAIL_PORT = config('EMAIL_PORT', cast=int)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', cast=bool, default=True)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool, default=False)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-
-DEFAULT_FROM_EMAIL = config(
-    'DEFAULT_FROM_EMAIL',
-    default=EMAIL_HOST_USER
-)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)

@@ -1,7 +1,7 @@
 from celery import shared_task
 from django.utils import timezone
 from django.db import models
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 import requests
 
 from google_health.services import GoogleAuthService
@@ -248,8 +248,42 @@ def calculate_wear_time_hours(assignment, day_date):
     diff_hours = (latest - earliest).total_seconds() / 3600.0
     return min(diff_hours, 24.0)
 
+def get_device_battery(account, headers):
+    """
+    Consulta el endpoint pairedDevices de Google Health para obtener
+    el nivel de batería del dispositivo emparejado.
+    
+    Devuelve un diccionario con:
+      - battery_level: int (0-100) o None
+      - battery_status: str ('High', 'Medium', 'Low', 'Empty') o None
+      - device_name: str o None
+    """
+    try:
+        url = "https://health.googleapis.com/v4/users/me/pairedDevices"
+        response = requests.get(url, headers=headers, timeout=15)
+        
+        if response.status_code != 200:
+            return {'battery_level': None, 'battery_status': None, 'device_name': None}
+        
+        data = response.json()
+        devices = data.get('pairedDevices', [])
+        
+        if not devices:
+            return {'battery_level': None, 'battery_status': None, 'device_name': None}
+        
+        # Cogemos el primer dispositivo (normalmente solo hay uno)
+        device = devices[0]
+        
+        return {
+            'battery_level': device.get('batteryLevel'),
+            'battery_status': device.get('batteryStatus'),
+            'device_name': device.get('deviceVersion'),
+        }
+    except Exception:
+        return {'battery_level': None, 'battery_status': None, 'device_name': None}
 
-def evaluate_data_alerts(account, assignment, now):
+
+def evaluate_data_alerts(account, assignment, now, headers):
 
     today = now.date()
 
@@ -434,6 +468,32 @@ def evaluate_data_alerts(account, assignment, now):
                 google_account=account,
                 assignment=assignment,
             )
+    
+    # =========================================================
+    # BATERÍA BAJA (<20%)
+    # =========================================================
+
+    battery_info = get_device_battery(account, headers)
+    battery_level = battery_info.get('battery_level')
+
+    if battery_level is not None:
+        if battery_level < 20:
+            activate_alert(
+                AlertType.LOW_BATTERY,
+                google_account=account,
+                assignment=assignment,
+                details={
+                    'battery_level': battery_level,
+                    'battery_status': battery_info.get('battery_status'),
+                    'device_name': battery_info.get('device_name'),
+                }
+            )
+        else:
+            resolve_alert_automatically(
+                AlertType.LOW_BATTERY,
+                google_account=account,
+                assignment=assignment,
+            )
 
 
 @shared_task
@@ -466,11 +526,18 @@ def sync_all_users_data():
                     assignment=assignment,
                 )
 
-                SyncLog.objects.create(
+                # Solo registrar el error TOKEN_ERROR una vez por hora
+                last_error = SyncLog.objects.filter(
                     google_account=account,
-                    result='TOKEN_ERROR',
-                    downloaded_records=0
-                )
+                    result='TOKEN_ERROR'
+                ).order_by('-sync_date').first()
+
+                if not last_error or (now - last_error.sync_date) > timedelta(hours=1):
+                    SyncLog.objects.create(
+                        google_account=account,
+                        result='TOKEN_ERROR',
+                        downloaded_records=0
+                    )
 
                 continue
 
@@ -752,23 +819,36 @@ def sync_all_users_data():
                     google_account=account,
                     assignment=assignment,
                 )
+                # Los errores siempre se registran
                 SyncLog.objects.create(
                     google_account=account,
                     result='TOTAL_ERROR',
                     downloaded_records=total_downloaded,
                 )
             else:
-                # ÉXITO: Resolvemos la alerta de sincronización limpiamente
                 resolve_alert_automatically(
                     AlertType.SYNC_ERROR,
                     google_account=account,
                     assignment=assignment,
                 )
-                SyncLog.objects.create(
+
+                # Solo registrar un SUCCESS al día por participante
+                now_local = timezone.localtime(now)
+                today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_utc = today_start_local.astimezone(dt_timezone.utc)
+
+                already_logged_today = SyncLog.objects.filter(
                     google_account=account,
                     result='SUCCESS',
-                    downloaded_records=total_downloaded,
-                )
+                    sync_date__gte=today_start_utc
+                ).exists()
+
+                if successful_endpoints > 0 and not already_logged_today:
+                    SyncLog.objects.create(
+                        google_account=account,
+                        result='SUCCESS',
+                        downloaded_records=total_downloaded,
+                    )
 
             # =====================================================
             # 6. EVALUAR ALERTAS BASADAS EN DATOS REALES
@@ -777,6 +857,7 @@ def sync_all_users_data():
                 account=account,
                 assignment=assignment,
                 now=now,
+                headers=headers,
             )
 
         except Exception as e:
@@ -785,8 +866,15 @@ def sync_all_users_data():
                 google_account=account,
                 assignment=assignment,
             )
-            SyncLog.objects.create(
+            # Solo registrar un error cada hora
+            last_error = SyncLog.objects.filter(
                 google_account=account,
-                result=f'ERROR: {str(e)[:100]}',
-                downloaded_records=0
-            )
+                result__startswith='ERROR'
+            ).order_by('-sync_date').first()
+
+            if not last_error or (now - last_error.sync_date) > timedelta(hours=1):
+                SyncLog.objects.create(
+                    google_account=account,
+                    result=f'ERROR: {str(e)[:100]}',
+                    downloaded_records=0
+                )

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const API_BASE = 'http://localhost:1574';
+import { API_URL } from '../config';
 
 type LoginProps = {
   onLogin: (
@@ -58,7 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
 
     try {
       if (step === 1) {
-        const res = await fetch(`${API_BASE}/api/auth/researcher/request-code/`, {
+        const res = await fetch(`${API_URL}/api/auth/researcher/request-code/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: username }),
@@ -72,7 +71,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
         setInfoMessage('Hemos enviado un código temporal a tu correo electrónico.');
         setStep(2);
       } else {
-        const res = await fetch(`${API_BASE}/api/auth/researcher/verify-code/`, {
+        const res = await fetch(`${API_URL}/api/auth/researcher/verify-code/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: username, code: otpCode }),
@@ -99,7 +98,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/login/`, {
+      const res = await fetch(`${API_URL}/api/admin/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -107,7 +106,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error || 'Las credenciales de administrador no son correctas.');
+        setError(t(json.error) || t('Unknown error'));
         return;
       }
       onLogin('participants', 'admin', username);
@@ -127,12 +126,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[#F4F8F5] font-sans text-[#18352A] transition-colors duration-500 dark:bg-[#06120A] dark:text-[#E8F1EB] flex flex-col justify-between">
-      
+
       {/* ANIMATED BACKGROUND */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-[15%] -top-[25%] h-[65vh] w-[65vw] rounded-full bg-[#DCEBE1]/80 blur-[110px] dark:bg-[#163A29]/30" />
         <div className="absolute -bottom-[25%] -right-[15%] h-[60vh] w-[60vh] rounded-full bg-[#C8E2D1]/45 blur-[120px] dark:bg-[#1B4A32]/20" />
-        
+
         <div className="senda-wave senda-wave-1">
           <svg viewBox="0 0 1600 700" preserveAspectRatio="none" className="h-full w-full" aria-hidden="true">
             <path d="M-150 420 C 80 270, 300 235, 540 330 C 790 430, 980 565, 1220 500 C 1400 450, 1530 340, 1750 230 L1750 750 L-150 750 Z" className="fill-[#C8E2D1]/65 dark:fill-[#163A29]/65" />
@@ -156,20 +155,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
         <button
           type="button"
           onClick={onBackToFront}
-          className="hidden h-10 cursor-pointer items-center gap-2 rounded-full border border-[#D6E2D9] bg-white/75 px-5 text-xs font-semibold text-[#527062] shadow-[0_8px_25px_rgba(29,90,61,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#A9C7B3] hover:text-[#1D5A3D] dark:border-[#2B4033] dark:bg-[#132019]/80 dark:text-[#A5B8AC] sm:flex"
+          className="flex h-9 sm:h-10 cursor-pointer items-center gap-1.5 sm:gap-2 rounded-full border border-[#D6E2D9] bg-white/75 px-3 sm:px-5 text-[10px] sm:text-xs font-semibold text-[#527062] shadow-[0_8px_25px_rgba(29,90,61,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#A9C7B3] hover:text-[#1D5A3D] dark:border-[#2B4033] dark:bg-[#132019]/80 dark:text-[#A5B8AC]"
         >
           <span className="text-sm leading-none">←</span>
-          <span>{t('Back to home', { defaultValue: 'Volver al inicio' })}</span>
+          <span className="hidden sm:inline">{t('Back to home', { defaultValue: 'Volver al inicio' })}</span>
+          <span className="sm:hidden">{t('Back to home')}</span>
         </button>
 
         <div className="flex items-center gap-2.5">
-          <div className="hidden items-center h-10 rounded-full border border-[#D6E2D9] bg-white/75 p-1 shadow-sm backdrop-blur-xl dark:border-[#2B4033] dark:bg-[#132019]/80 sm:flex">
+          <div className="flex items-center h-9 sm:h-10 rounded-full border border-[#D6E2D9] bg-white/75 p-1 shadow-sm backdrop-blur-xl dark:border-[#2B4033] dark:bg-[#132019]/80">
             <button
               type="button"
               onClick={() => i18n.changeLanguage('es')}
-              className={`flex h-full cursor-pointer items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition-all ${
-                i18n.language === 'es' ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]' : 'text-[#718077] hover:text-[#315D46] dark:text-[#8FA197]'
-              }`}
+              className={`flex h-full cursor-pointer items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-3 text-[10px] sm:text-[11px] font-semibold transition-all ${i18n.language === 'es' ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]' : 'text-[#718077] hover:text-[#315D46] dark:text-[#8FA197]'
+                }`}
             >
               <img src="https://flagcdn.com/w40/es.png" alt="Español" className="h-3.5 w-3.5 rounded-full object-cover" />
               ES
@@ -177,9 +176,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
             <button
               type="button"
               onClick={() => i18n.changeLanguage('en')}
-              className={`flex h-full cursor-pointer items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition-all ${
-                i18n.language === 'en' ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]' : 'text-[#718077] hover:text-[#315D46] dark:text-[#8FA197]'
-              }`}
+              className={`flex h-full cursor-pointer items-center gap-1 sm:gap-1.5 rounded-full px-2 sm:px-3 text-[10px] sm:text-[11px] font-semibold transition-all ${i18n.language === 'en' ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]' : 'text-[#718077] hover:text-[#315D46] dark:text-[#8FA197]'
+                }`}
             >
               <img src="https://flagcdn.com/w40/gb.png" alt="English" className="h-3.5 w-3.5 rounded-full object-cover" />
               EN
@@ -190,7 +188,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
             type="button"
             onClick={() => setDarkMode((value) => !value)}
             title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-[#D9E5DB] bg-white/70 text-[#527062] transition-all hover:scale-105 dark:border-[#30453A] dark:bg-[#14221A] dark:text-[#A9D7B9]"
+            className="flex h-9 w-9 sm:h-10 sm:w-10 cursor-pointer items-center justify-center rounded-full border border-[#D9E5DB] bg-white/70 text-[#527062] transition-all hover:scale-105 dark:border-[#30453A] dark:bg-[#14221A] dark:text-[#A9D7B9]"
           >
             {darkMode ? (
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
@@ -220,7 +218,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
         {/* LOGIN CARD */}
         <div className="w-full max-w-[430px]">
           <div className="rounded-[28px] border border-[#98c7a5] bg-white/90 px-6 py-6 shadow-[0_25px_70px_rgba(29,90,61,0.13)] backdrop-blur-2xl transition-all sm:px-7 sm:py-7 dark:border-[#293D31] dark:bg-[#101B15]/90 dark:shadow-[0_25px_70px_rgba(0,0,0,0.28)]">
-            
+
             {/* HEADER */}
             <div className="mb-4 flex items-center justify-between">
               <div className="mr-auto">
@@ -242,18 +240,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
                 <button
                   type="button"
                   onClick={() => setRole('researcher')}
-                  className={`group flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-300 ${
-                    role === 'researcher' ? 'bg-white text-[#1D5A3D] shadow-sm dark:bg-[#1B2D23] dark:text-[#9BDCB6]' : 'text-[#75837B] hover:text-[#365D47] dark:text-[#7F9086]'
-                  }`}
+                  className={`group flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-300 ${role === 'researcher' ? 'bg-white text-[#1D5A3D] shadow-sm dark:bg-[#1B2D23] dark:text-[#9BDCB6]' : 'text-[#75837B] hover:text-[#365D47] dark:text-[#7F9086]'
+                    }`}
                 >
                   {t('Researcher')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setRole('admin')}
-                  className={`group flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-300 ${
-                    role === 'admin' ? 'bg-white text-[#1D5A3D] shadow-sm dark:bg-[#1B2D23] dark:text-[#9BDCB6]' : 'text-[#75837B] hover:text-[#365D47] dark:text-[#7F9086]'
-                  }`}
+                  className={`group flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all duration-300 ${role === 'admin' ? 'bg-white text-[#1D5A3D] shadow-sm dark:bg-[#1B2D23] dark:text-[#9BDCB6]' : 'text-[#75837B] hover:text-[#365D47] dark:text-[#7F9086]'
+                    }`}
                 >
                   {t('Administrator')}
                 </button>
@@ -301,7 +297,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
                     required
                     autoComplete="off"
                     placeholder={role === 'admin' ? t('Enter your username', { defaultValue: 'Enter your username' }) : 'investigador@universidad.es'}
-                    className="w-full rounded-xl border border-[#D6E3DA] bg-[#F8FBF9] px-3.5 py-2.5 text-xs text-[#18352A] outline-none transition-all placeholder:text-[#A2AEA7] focus:border-[#63A982] focus:bg-white focus:ring-4 focus:ring-[#DCEBE1]/80 dark:border-[#2D4335] dark:bg-[#0C1610] dark:text-[#E6F0E9]"
+                    className="w-full rounded-xl border border-[#D6E3DA] bg-[#F8FBF9] px-3.5 py-2.5 text-xs text-[#18352A] outline-none transition-all placeholder:text-[#A2AEA7] focus:border-[#63A982] focus:bg-white focus:ring-4 focus:ring-[#DCEBE1]/80 dark:border-[#2D4335] dark:bg-[#0C1610] dark:text-senda-main"
                   />
                 </div>
               )}
@@ -318,7 +314,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
                     required
                     autoComplete="new-password"
                     placeholder="••••••••••"
-                    className="w-full rounded-xl border border-[#D6E3DA] bg-[#F8FBF9] px-3.5 py-2.5 text-xs text-[#18352A] outline-none transition-all placeholder:text-[#A2AEA7] focus:border-[#63A982] focus:bg-white focus:ring-4 focus:ring-[#DCEBE1]/80 dark:border-[#2D4335] dark:bg-[#0C1610] dark:text-[#E6F0E9]"
+                    className="w-full rounded-xl border border-[#D6E3DA] bg-[#F8FBF9] px-3.5 py-2.5 text-xs text-[#18352A] outline-none transition-all placeholder:text-[#A2AEA7] focus:border-[#63A982] focus:bg-white focus:ring-4 focus:ring-[#DCEBE1]/80 dark:border-[#2D4335] dark:bg-[#0C1610] dark:text-senda-main"
                   />
                 </div>
               )}
@@ -347,7 +343,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
                   </>
                 ) : (
                   <>
-                    <span>{role === 'researcher' && step === 1 ? t('Request Code') : t('Access system', { defaultValue: 'Access system' })}</span>
+                    <span>{role === 'researcher' && step === 1 ? t('Request Code') : t('Access system')}</span>
                     <span>→</span>
                   </>
                 )}

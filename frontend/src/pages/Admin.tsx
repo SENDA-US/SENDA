@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { CustomSelect } from '../components/CustomSelect';
 import { Pagination } from '../components/Pagination';
 import { SectionHeader } from '../components/SectionHeader';
-
-const API_BASE = 'http://localhost:1574';
+import { API_URL } from '../config';
 
 type Researcher = {
   email: string;
@@ -27,7 +26,7 @@ const Admin: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const loadResearchers = () => {
-    fetch(`${API_BASE}/api/admin/researchers/`, { credentials: 'include' })
+    fetch(`${API_URL}/api/admin/researchers/`, { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => setResearchers(data.items || []))
       .catch(() => setError(t('Error loading researchers')));
@@ -47,7 +46,7 @@ const Admin: React.FC = () => {
     setMessage(null);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/admin/researchers/create/`, {
+      const response = await fetch(`${API_URL}/api/admin/researchers/create/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -75,7 +74,7 @@ const Admin: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/admin/researchers/delete/`, {
+      const response = await fetch(`${API_URL}/api/admin/researchers/delete/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

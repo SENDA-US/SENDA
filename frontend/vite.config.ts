@@ -10,5 +10,13 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
+    allowedHosts: [
+      'senda.sendaproject.es',
+      'senda.us.es',
+      '192.168.20.84',
+      '150.214.230.66',
+      'localhost',
+      'senda01.int.local',
+    ],
   },
 });

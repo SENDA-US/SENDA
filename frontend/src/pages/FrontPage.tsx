@@ -135,50 +135,53 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center rounded-full border border-[#D9E5DB] bg-white/70 p-1 dark:border-[#30453A] dark:bg-[#14221A]/80 sm:flex">
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            {/* Selector de idioma */}
+            <div className="flex items-center rounded-full border border-[#D9E5DB] bg-white/70 p-1 dark:border-[#30453A] dark:bg-[#14221A]/80">
               <button
                 onClick={() => i18n.changeLanguage('es')}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${i18n.language === 'es'
+                className={`flex cursor-pointer items-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-all sm:gap-1.5 sm:px-3 sm:text-[11px] ${i18n.language === 'es'
                   ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]'
                   : 'text-[#75847A] dark:text-[#91A298]'
                   }`}
               >
-                <img src="https://flagcdn.com/w40/es.png" alt={t('Lang ES Alt')} className="h-4 w-4 rounded-full object-cover" />
+                <img src="https://flagcdn.com/w40/es.png" alt={t('Lang ES Alt')} className="h-3.5 w-3.5 rounded-full object-cover sm:h-4 sm:w-4" />
                 ES
               </button>
               <button
                 onClick={() => i18n.changeLanguage('en')}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all ${i18n.language === 'en'
+                className={`flex cursor-pointer items-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-all sm:gap-1.5 sm:px-3 sm:text-[11px] ${i18n.language === 'en'
                   ? 'bg-[#DCEBE1] text-[#1D5A3D] dark:bg-[#284738] dark:text-[#A9E1C0]'
                   : 'text-[#75847A] dark:text-[#91A298]'
                   }`}
               >
-                <img src="https://flagcdn.com/w40/gb.png" alt={t('Lang EN Alt')} className="h-4 w-4 rounded-full object-cover" />
+                <img src="https://flagcdn.com/w40/gb.png" alt={t('Lang EN Alt')} className="h-3.5 w-3.5 rounded-full object-cover sm:h-4 sm:w-4" />
                 EN
               </button>
             </div>
 
+            {/* Botón modo claro/oscuro */}
             <button
               onClick={() => setDarkMode((value) => !value)}
               title={darkMode ? t('Toggle Light Mode') : t('Toggle Dark Mode')}
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-[#D9E5DB] bg-white/70 text-[#527062] transition-all hover:scale-105 dark:border-[#30453A] dark:bg-[#14221A] dark:text-[#A9D7B9]"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-[#D9E5DB] bg-white/70 text-[#527062] transition-all hover:scale-105 dark:border-[#30453A] dark:bg-[#14221A] dark:text-[#A9D7B9] sm:h-10 sm:w-10"
             >
               {darkMode ? (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
                 </svg>
               ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+                <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="12" r="4" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l-1.41 1.41M18.66 5.34l-1.41 1.41" />
                 </svg>
               )}
             </button>
 
+            {/* Botón "Sign in" */}
             <button
               onClick={onGoToLogin}
-              className="hidden h-10 cursor-pointer items-center rounded-full bg-[#1D5A3D] px-5 text-sm font-semibold text-white shadow-[0_8px_25px_rgba(29,90,61,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#174A32] dark:bg-[#72C99B] dark:text-[#102018] dark:hover:bg-[#8BD7AC] sm:flex"
+              className="flex h-9 cursor-pointer items-center rounded-full bg-[#1D5A3D] px-3 text-xs font-semibold text-white shadow-[0_8px_25px_rgba(29,90,61,0.18)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#174A32] dark:bg-[#72C99B] dark:text-[#102018] dark:hover:bg-[#8BD7AC] sm:h-10 sm:px-5 sm:text-sm"
             >
               {t('Login')}
             </button>

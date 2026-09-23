@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CustomSelect } from '../components/CustomSelect';
 import { Pagination } from '../components/Pagination';
 import { SectionHeader } from '../components/SectionHeader';
+import { API_URL } from '../config';
 
 type ExportLog = {
   id: string;
@@ -13,8 +14,6 @@ type ExportLog = {
   dateStr: string;
   timeStr: string;
 };
-
-const API_BASE = 'http://localhost:1574';
 
 interface ExportsProps {
   userEmail: string;
@@ -59,8 +58,8 @@ const Exports: React.FC<ExportsProps> = ({ onNavigate, userEmail }) => {
     const fetchDropdownData = async () => {
       try {
         const [pRes, fRes] = await Promise.all([
-          fetch(`${API_BASE}/api/participants/`, { credentials: 'include' }),
-          fetch(`${API_BASE}/api/fitbits/`, { credentials: 'include' })
+          fetch(`${API_URL}/api/participants/`, { credentials: 'include' }),
+          fetch(`${API_URL}/api/fitbits/`, { credentials: 'include' })
         ]);
 
         if (pRes.ok) {
@@ -84,7 +83,7 @@ const Exports: React.FC<ExportsProps> = ({ onNavigate, userEmail }) => {
   const handleOpenModalOrDownload = (type: string, label: string, format: string) => {
     if (type === 'researchers') {
       const params = new URLSearchParams({ type, format });
-      window.open(`${API_BASE}/api/export/?${params.toString()}`, '_blank');
+      window.open(`${API_URL}/api/export/?${params.toString()}`, '_blank');
 
       const now = new Date();
       const dateStr = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -149,7 +148,7 @@ const Exports: React.FC<ExportsProps> = ({ onNavigate, userEmail }) => {
     // Si no hay filtros, descargar todo sin verificación previa
     if (!hasFilters) {
       const downloadParams = new URLSearchParams({ type, format });
-      window.open(`${API_BASE}/api/export/?${downloadParams.toString()}`, '_blank');
+      window.open(`${API_URL}/api/export/?${downloadParams.toString()}`, '_blank');
 
       const now = new Date();
       setHistory((prev) => [{
@@ -168,7 +167,7 @@ const Exports: React.FC<ExportsProps> = ({ onNavigate, userEmail }) => {
     const checkParams = new URLSearchParams({ type, format, check: 'true', ...cleanedFilters });
 
     try {
-      const checkResponse = await fetch(`${API_BASE}/api/export/?${checkParams.toString()}`, {
+      const checkResponse = await fetch(`${API_URL}/api/export/?${checkParams.toString()}`, {
         credentials: 'include'
       });
 
@@ -191,7 +190,7 @@ const Exports: React.FC<ExportsProps> = ({ onNavigate, userEmail }) => {
       }
 
       const downloadParams = new URLSearchParams({ type, format, ...cleanedFilters });
-      const downloadResponse = await fetch(`${API_BASE}/api/export/?${downloadParams.toString()}`, {
+      const downloadResponse = await fetch(`${API_URL}/api/export/?${downloadParams.toString()}`, {
         credentials: 'include'
       });
 

@@ -123,7 +123,7 @@ const en = {
     "Password": "Password",
     "Role": "Role",
     "Request Code": "Request verification code",
-    "Access System": "Access system",
+    "Access system": "Access system",
     "Processing": "Processing...",
     "Back to home": "Back to home",
     "Health": "Health",
@@ -131,6 +131,11 @@ const en = {
     "Neuroscience": "Neuroscience",
     "Development": "Development",
     "Andalusia": "Andalusia",
+    "invalid_credentials": "Invalid credentials",
+    "not_authorized": "You don't have permission to access",
+    "method_not_allowed": "Method not allowed",
+    "invalid_json": "Invalid data format",
+    "missing_credentials": "Missing credentials",
 
     // Participants
     "Participants Title": "Participants",
@@ -167,6 +172,7 @@ const en = {
     "Delete confirmation": "Delete participant",
     "Authorization Completed Title": "Authorization completed",
     "No participants found": "No participants found",
+    "Participant Type": "Participant Type",
 
     // Fitbits
     "Fitbit Title": "Fitbit",

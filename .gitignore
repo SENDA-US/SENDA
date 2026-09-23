@@ -7,6 +7,10 @@ __pycache__/
 .vscode/
 .venv
 .env
+*.tar
+*.tar.gz
+frontend/.env
+backend/.env
 
 backend/celerybeat-schedule.*
 backend/celerybeat-schedule

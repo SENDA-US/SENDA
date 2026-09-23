@@ -4,8 +4,7 @@ import { CustomSelect } from '../components/CustomSelect';
 import { Pagination } from '../components/Pagination';
 import { SectionHeader } from '../components/SectionHeader';
 import ReactDOM from 'react-dom';
-
-const API_BASE = 'http://localhost:1574';
+import { API_URL } from '../config';
 
 type FitbitItem = {
   fitbit_code: string;
@@ -27,6 +26,7 @@ const Fitbits: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [selectedFitbit, setSelectedFitbit] = useState<FitbitItem | null>(null);
+  const [originalCode, setOriginalCode] = useState('');
 
   const [pageSize, setPageSize] = useState<number>(() => {
     const savedSize = localStorage.getItem('fitbits_page_size');
@@ -35,13 +35,19 @@ const Fitbits: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const loadFitbits = () => {
-    fetch(`${API_BASE}/api/fitbits/`, { credentials: 'include' })
+    fetch(`${API_URL}/api/fitbits/`, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
       .then((data) => {
         const items = data.items || [];
+
+        // Ordenar los elementos por fitbit_code de forma ascendente (F_001, F_002...)
+        items.sort((a: FitbitItem, b: FitbitItem) =>
+          a.fitbit_code.localeCompare(b.fitbit_code, undefined, { numeric: true })
+        );
+
         setFitbits(items);
         setSummary(data.counts || { in_use: 0, free: 0, maintenance: 0, inactive: 0 });
 
@@ -75,7 +81,7 @@ const Fitbits: React.FC = () => {
     setSubmitSuccess(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/fitbits/create/`, {
+      const response = await fetch(`${API_URL}/api/fitbits/create/`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -145,7 +151,7 @@ const Fitbits: React.FC = () => {
         }}
       />
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
         {[
           {
             statusKey: 'IN_USE',
@@ -196,18 +202,19 @@ const Fitbits: React.FC = () => {
                 setSelectedStatusFilter(isSelected ? 'ALL' : item.statusKey);
                 setCurrentPage(1);
               }}
-              className={`cursor-pointer rounded-2xl border ${item.backgroundColor} p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 text-center ${item.hoverShadow} ${isSelected ? item.activeRing : item.borderColor
+              className={`cursor-pointer rounded-2xl border ${item.backgroundColor} p-3 sm:p-5 shadow-sm transition-all duration-200 text-center ${item.hoverShadow} ${isSelected ? item.activeRing : item.borderColor
                 }`}
             >
-              <p className={`text-[11px] font-extrabold uppercase tracking-[0.25em] ${item.textColor}`}>
+              <p className={`text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] leading-tight ${item.textColor}`}>
                 {item.label}
               </p>
-              <p className="mt-2 text-3xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>{item.value}</p>
+              <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>
+                {item.value}
+              </p>
             </div>
           );
         })}
       </div>
-
       <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-6 shadow-xl space-y-6 transition-colors duration-300">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full">
@@ -263,12 +270,17 @@ const Fitbits: React.FC = () => {
                     ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900'
                     : statusLower.includes('free') || statusLower.includes('libre')
                       ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900'
-                      : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-900';
+                      : statusLower.includes('inactive') || statusLower.includes('inactivo')
+                        ? 'bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900'
+                        : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-900';
 
                   return (
                     <tr
                       key={fitbit.fitbit_code}
-                      onClick={() => setSelectedFitbit(fitbit)}
+                      onClick={() => {
+                        setSelectedFitbit(fitbit);
+                        setOriginalCode(fitbit.fitbit_code);
+                      }}
                       className="cursor-pointer transition-all duration-200 hover:bg-senda-light/80 dark:hover:bg-senda-dark/50 hover:shadow-[inset_3px_0_0_0_theme(colors.senda-primary)] dark:hover:shadow-[inset_3px_0_0_0_theme(colors.senda-accent)]"
                     >
                       <td className="px-6 py-4 text-xs font-bold text-senda-main dark:text-white flex items-center gap-3">
@@ -310,18 +322,6 @@ const Fitbits: React.FC = () => {
       {isModalOpen && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="relative w-full max-w-[400px] overflow-hidden rounded-[28px] bg-senda-light dark:bg-senda-card p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
-
-            {/* Decoración: blobs difuminados */}
-            <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#DCEBE1] opacity-70 blur-3xl dark:bg-[#163A29]/40" />
-            <div className="pointer-events-none absolute -bottom-16 -left-12 h-40 w-40 rounded-full bg-[#E7F1E9] opacity-80 blur-3xl dark:bg-[#153426]/30" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.05]"
-              style={{
-                backgroundImage: 'linear-gradient(#1D5A3D 1px, transparent 1px), linear-gradient(90deg, #1D5A3D 1px, transparent 1px)',
-                backgroundSize: '26px 26px',
-              }}
-            />
-
             <div className="relative">
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -333,7 +333,6 @@ const Fitbits: React.FC = () => {
                 </svg>
               </button>
 
-              {/* Icono con punto de estado */}
               <div className="mb-4 flex justify-center">
                 <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder shadow-[0_10px_24px_rgba(29,90,61,0.14)]">
                   <svg className="h-7 w-7 text-senda-primary dark:text-senda-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -356,22 +355,22 @@ const Fitbits: React.FC = () => {
               <form onSubmit={handleCreateFitbit} className="space-y-3.5" autoComplete="off">
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
-                    {t('Automatic Code')}
+                    {t('Fitbit Code')}
                   </label>
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-input px-3.5 py-2.5 opacity-80">
-                    <svg className="h-4 w-4 shrink-0 text-[#A2AEA7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                    </svg>
+                  <div className="flex items-center gap-1 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3.5 py-2.5">
+                    <span className="text-sm font-bold text-senda-primary dark:text-senda-accent select-none">F_</span>
                     <input
                       type="text"
-                      value={nextCode}
-                      disabled
-                      className="w-full bg-transparent text-sm font-semibold text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed"
+                      value={nextCode.replace('F_', '')}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        setNextCode(`F_${digits}`);
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-senda-main dark:text-white outline-none"
+                      placeholder="001"
                     />
                   </div>
                 </div>
-
-
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
                     {t('Operational Status')}
@@ -420,18 +419,6 @@ const Fitbits: React.FC = () => {
       {selectedFitbit && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="relative w-full max-w-xl rounded-[28px] bg-senda-light dark:bg-senda-card p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
-
-            {/* Decoración: blobs difuminados */}
-            <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-[#DCEBE1] opacity-70 blur-3xl dark:bg-[#163A29]/40" />
-            <div className="pointer-events-none absolute -bottom-16 -left-12 h-40 w-40 rounded-full bg-[#E7F1E9] opacity-80 blur-3xl dark:bg-[#153426]/30" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-[0.04] dark:opacity-[0.05]"
-              style={{
-                backgroundImage: 'linear-gradient(#1D5A3D 1px, transparent 1px), linear-gradient(90deg, #1D5A3D 1px, transparent 1px)',
-                backgroundSize: '26px 26px',
-              }}
-            />
-
             <div className="relative">
               <div className="mb-6 flex items-start justify-between">
                 <div className="flex items-center gap-4">
@@ -456,7 +443,26 @@ const Fitbits: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Code')}</span>
-                  <span className="text-sm font-bold text-senda-main dark:text-white">{selectedFitbit.fitbit_code}</span>
+                  <div className="flex items-center gap-1 w-full text-sm font-bold text-senda-main dark:text-white bg-transparent outline-none border border-senda-border dark:border-senda-darkborder rounded-xl px-3 py-2 mt-1 focus-within:border-senda-secondary transition-all">
+                    <span className="text-sm font-bold text-senda-primary dark:text-senda-accent select-none">F_</span>
+                    <input
+                      type="text"
+                      value={selectedFitbit.fitbit_code.replace('F_', '')}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        setSelectedFitbit({ ...selectedFitbit, fitbit_code: `F_${digits}` });
+                      }}
+                      onBlur={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        if (digits) {
+                          const padded = digits.padStart(3, '0');
+                          setSelectedFitbit({ ...selectedFitbit, fitbit_code: `F_${padded}` });
+                        }
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-senda-main dark:text-white outline-none"
+                      placeholder="001"
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
@@ -467,7 +473,9 @@ const Fitbits: React.FC = () => {
                         ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
                         : selectedFitbit.status.toLowerCase().includes('free') || selectedFitbit.status.toLowerCase().includes('libre')
                           ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300'
-                          : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                          : selectedFitbit.status.toLowerCase().includes('inactive') || selectedFitbit.status.toLowerCase().includes('inactivo')
+                            ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400'
+                            : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
                         }`}>
                         <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
                         {selectedFitbit.status.replace('_', ' ').toLowerCase()}
@@ -479,7 +487,7 @@ const Fitbits: React.FC = () => {
                         value={selectedFitbit.status}
                         onChange={async (newStatus) => {
                           try {
-                            const resp = await fetch(`${API_BASE}/api/fitbits/update/status/`, {
+                            const resp = await fetch(`${API_URL}/api/fitbits/update/status/`, {
                               method: 'POST',
                               credentials: 'include',
                               headers: { 'Content-Type': 'application/json' },
@@ -503,13 +511,13 @@ const Fitbits: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-senda-border dark:border-senda-darkborder">
+              <div className="pt-5 mt-5 border-t border-senda-border dark:border-senda-darkborder flex flex-col sm:flex-row justify-between items-center gap-3">
                 <button
                   onClick={async () => {
                     if (!selectedFitbit) return;
                     if (!confirm(`${t('Delete Fitbit Confirmation')} ${selectedFitbit.fitbit_code}?`)) return;
                     try {
-                      const resp = await fetch(`${API_BASE}/api/fitbits/delete/`, {
+                      const resp = await fetch(`${API_URL}/api/fitbits/delete/`, {
                         method: 'DELETE',
                         credentials: 'include',
                         headers: { 'Content-Type': 'application/json' },
@@ -526,17 +534,52 @@ const Fitbits: React.FC = () => {
                       alert(t('Server connection error'));
                     }
                   }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-5 py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                 >
                   {t('Delete Fitbit')}
                 </button>
 
-                <button
-                  onClick={() => setSelectedFitbit(null)}
-                  className="w-full sm:w-auto rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-6 py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
-                >
-                  {t('Close')}
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Formatear estrictamente a 3 dígitos antes de enviar
+                        const digits = selectedFitbit.fitbit_code.replace('F_', '').replace(/\D/g, '');
+                        const formattedCode = `F_${digits.padStart(3, '0')}`;
+
+                        const resp = await fetch(`${API_URL}/api/fitbits/update/code/`, {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            original_code: originalCode,
+                            fitbit_code: formattedCode
+                          }),
+                        });
+                        const data = await resp.json();
+                        if (resp.ok) {
+                          alert(t('Fitbit updated successfully'));
+                          setOriginalCode(formattedCode);
+                          loadFitbits();
+                        } else {
+                          alert(data.error || t('Error updating fitbit code'));
+                        }
+                      } catch {
+                        alert(t('Server connection error'));
+                      }
+                    }}
+                    className="rounded-2xl bg-senda-primary dark:bg-senda-accent text-white dark:text-senda-dark px-5 py-2.5 text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer"
+                  >
+                    {t('Save Changes')}
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFitbit(null)}
+                    className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-5 py-2.5 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    {t('Close')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
