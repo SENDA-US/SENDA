@@ -336,74 +336,77 @@ const PhysiologicalData: React.FC = () => {
         </button>
       </div>
 
-      <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-8 shadow-xl transition-colors duration-300">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => handleExport('csv')}
-                className="px-4 py-3 text-[11px] bg-gradient-to-b from-[#4C7C63] to-[#1F3B2C] hover:from-[#537F69] hover:to-[#234030] text-white dark:from-white dark:via-[#F4F4F0] dark:to-[#E6E6DF] dark:text-senda-main font-semibold rounded-full shadow-md transition cursor-pointer"
-              >
-                {t('Export CSV')}
-              </button>
-              <button
-                onClick={() => handleExport('xlsx')}
-                className="px-4 py-3 text-[11px] bg-gradient-to-b from-[#4C7C63] to-[#1F3B2C] hover:from-[#537F69] hover:to-[#234030] text-white dark:from-white dark:via-[#F4F4F0] dark:to-[#E6E6DF] dark:text-senda-main font-semibold rounded-full shadow-md transition cursor-pointer"
-              >
-                {t('Export Excel')}
-              </button>
-            </div>
-            <button
-              onClick={clearFilters}
-              className="ml-auto rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 py-2 text-[11px] font-bold text-rose-500 dark:text-rose-400 transition hover:bg-rose-500 hover:text-white cursor-pointer shadow-sm"
-            >
-              {t('Clear Filters')}
-            </button>
-          </div>
+      <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-4 sm:p-8 shadow-xl transition-colors duration-300">
+        {/* Cabecera: botones de exportación + limpiar filtros */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => handleExport('csv')}
+            className="px-3 sm:px-4 py-2 sm:py-3 text-[11px] bg-gradient-to-b from-[#4C7C63] to-[#1F3B2C] hover:from-[#537F69] hover:to-[#234030] text-white dark:from-white dark:via-[#F4F4F0] dark:to-[#E6E6DF] dark:text-senda-main font-semibold rounded-full shadow-md transition cursor-pointer whitespace-nowrap"
+          >
+            {t('Export CSV')}
+          </button>
+          <button
+            onClick={() => handleExport('xlsx')}
+            className="px-3 sm:px-4 py-2 sm:py-3 text-[11px] bg-gradient-to-b from-[#4C7C63] to-[#1F3B2C] hover:from-[#537F69] hover:to-[#234030] text-white dark:from-white dark:via-[#F4F4F0] dark:to-[#E6E6DF] dark:text-senda-main font-semibold rounded-full shadow-md transition cursor-pointer whitespace-nowrap"
+          >
+            {t('Export Excel')}
+          </button>
+          <button
+            onClick={clearFilters}
+            className="ml-auto rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 py-2 text-[11px] font-bold text-rose-500 dark:text-rose-400 transition hover:bg-rose-500 hover:text-white cursor-pointer shadow-sm whitespace-nowrap"
+          >
+            {t('Clear Filters')}
+          </button>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-senda-border dark:border-senda-darkborder grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <CustomMultiSearchableSelect
-            label={t('Participants Resource')}
-            selectedValues={selectedParticipants}
-            onChange={setSelectedParticipants}
-            options={participantsList}
-            placeholder={t('Search Participant')}
-          />
+        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-senda-border dark:border-senda-darkborder grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+          <div className="col-span-2 sm:col-span-1">
+            <CustomMultiSearchableSelect
+              label={t('Participants Resource')}
+              selectedValues={selectedParticipants}
+              onChange={setSelectedParticipants}
+              options={participantsList}
+              placeholder={t('Search Participant')}
+            />
+          </div>
 
-          <CustomMultiSearchableSelect
-            label={t('Fitbit')}
-            selectedValues={selectedFitbits}
-            onChange={setSelectedFitbits}
-            options={fitbitsList}
-            placeholder={t('Search Fitbit')}
-          />
+          <div className="col-span-2 sm:col-span-1">
+            <CustomMultiSearchableSelect
+              label={t('Fitbit')}
+              selectedValues={selectedFitbits}
+              onChange={setSelectedFitbits}
+              options={fitbitsList}
+              placeholder={t('Search Fitbit')}
+            />
+          </div>
 
-          <CustomMultiSearchableSelect
-            label={t('Variable')}
-            selectedValues={selectedVariables}
-            onChange={setSelectedVariables}
-            options={VARIABLE_OPTIONS}
-            placeholder={t('Search Variable')}
-          />
+          <div className="col-span-2 sm:col-span-1">
+            <CustomMultiSearchableSelect
+              label={t('Variable')}
+              selectedValues={selectedVariables}
+              onChange={setSelectedVariables}
+              options={VARIABLE_OPTIONS}
+              placeholder={t('Search Variable')}
+            />
+          </div>
 
-          <div>
+          <div className="col-span-1">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">{t('From')}</label>
             <input
               type="datetime-local"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-4 py-3 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary"
+              className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
             />
           </div>
 
-          <div>
+          <div className="col-span-1">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">{t('To')}</label>
             <input
               type="datetime-local"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-4 py-3 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary"
+              className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
             />
           </div>
         </div>

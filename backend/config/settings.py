@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     #'django_crontab',
 ]
 
-CORS_ALLOWED_ORIGINS = [config('FRONTEND_URL')]
+CORS_ALLOWED_ORIGINS = [config('FRONTEND_URL'), ]
 
 CORS_ALLOW_CREDENTIALS = True
 

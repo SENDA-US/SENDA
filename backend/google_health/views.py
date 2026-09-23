@@ -39,6 +39,9 @@ def _add_cors_headers(request, resp):
             'http://127.0.0.1:5174',
             'http://192.168.20.84:5174',
             'http://192.168.20.84',
+            'https://150.214.230.66:5174',
+            'https://150.214.230.66',
+            'https://senda.us.es',
         ]
         if origin in allowed_origins or origin.startswith('http://localhost') or origin.startswith('http://127.0.0.1'):
             resp['Access-Control-Allow-Origin'] = origin

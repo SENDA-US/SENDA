@@ -139,34 +139,42 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
       </div>
 
       {!showResolved && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2 sm:gap-4">
           <div
             onClick={() => { setSelectedPriority('HIGH'); setCurrentPage(1); }}
-            className={`cursor-pointer rounded-2xl border bg-white dark:bg-senda-card p-5 shadow-lg shadow-slate-100 dark:shadow-none transition-all duration-200 hover:-translate-y-1 text-center 
-              ${selectedPriority === 'HIGH'
-              ? 'border-rose-500 ring-2 ring-rose-500/20'
-              : 'border-rose-200 dark:border-rose-900'
+            className={`cursor-pointer rounded-2xl border bg-white dark:bg-senda-card p-3 sm:p-5 shadow-lg shadow-slate-100 dark:shadow-none transition-all duration-200 text-center 
+        ${selectedPriority === 'HIGH'
+                ? 'border-rose-500 ring-2 ring-rose-500/20'
+                : 'border-rose-200 dark:border-rose-900'
               }`}
           >
-            <div className="flex items-center justify-center gap-2">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400">{t('Critical')}</p>
-              <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+              <p className="text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] text-rose-600 dark:text-rose-400 leading-tight whitespace-nowrap">
+                {t('Critical')}
+              </p>
+              <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
             </div>
-            <p className="mt-2 text-3xl font-extrabold text-senda-main dark:text-white">{countHigh}</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-extrabold text-senda-main dark:text-white">
+              {countHigh}
+            </p>
           </div>
 
           <div
             onClick={() => { setSelectedPriority('MEDIUM'); setCurrentPage(1); }}
-            className={`cursor-pointer rounded-2xl border bg-white dark:bg-senda-card p-5 shadow-lg shadow-slate-100 dark:shadow-none transition-all duration-200 hover:-translate-y-1 text-center 
-              ${selectedPriority === 'MEDIUM'
-              ? 'border-amber-500 ring-2 ring-amber-500/20'
-              : 'border-amber-200 dark:border-amber-900'
+            className={`cursor-pointer rounded-2xl border bg-white dark:bg-senda-card p-3 sm:p-5 shadow-lg shadow-slate-100 dark:shadow-none transition-all duration-200 text-center 
+        ${selectedPriority === 'MEDIUM'
+                ? 'border-amber-500 ring-2 ring-amber-500/20'
+                : 'border-amber-200 dark:border-amber-900'
               }`}
           >
             <div className="flex items-center justify-center">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-amber-600 dark:text-amber-400">{t('Warnings')}</p>
+              <p className="text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] text-amber-600 dark:text-amber-400 leading-tight whitespace-nowrap">
+                {t('Warnings')}
+              </p>
             </div>
-            <p className="mt-2 text-3xl font-extrabold text-senda-main dark:text-white">{countMedium}</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-extrabold text-senda-main dark:text-white">
+              {countMedium}
+            </p>
           </div>
         </div>
       )}

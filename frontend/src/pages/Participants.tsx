@@ -250,41 +250,41 @@ const Participants: React.FC = () => {
       )}
 
       {selectedParticipant && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-xl rounded-[28px] bg-senda-light dark:bg-senda-card p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[28px] bg-senda-light dark:bg-senda-card p-5 sm:p-7 shadow-[0_30px_60px_rgba(29,90,61,0.18)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
             <div className="relative">
-              <div className="mb-6 flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder text-senda-primary dark:text-senda-accent">
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mb-4 sm:mb-6 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="flex h-11 w-11 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder text-senda-primary dark:text-senda-accent">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>{t('Participant Detail')}</h2>
-                    <p className="text-xs text-[#6B6F66] dark:text-[#9AA093]">{t('Full Info')}</p>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-xl font-extrabold text-senda-main dark:text-white truncate" style={{ fontFamily: 'Fraunces, serif' }}>{t('Participant Detail')}</h2>
+                    <p className="text-[10px] sm:text-xs text-[#6B6F66] dark:text-[#9AA093] truncate">{t('Full Info')}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedParticipant(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-slate-300 hover:border-senda-border dark:hover:bg-slate-700 cursor-pointer transition"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-slate-300 hover:border-senda-border dark:hover:bg-slate-700 cursor-pointer transition"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Code')}</span>
                   <span className="text-sm font-bold text-senda-main dark:text-white">{selectedParticipant.participant_code}</span>
                 </div>
 
-                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Email')}</span>
                   <span className="text-xs font-semibold text-senda-main dark:text-slate-200">{selectedParticipant.email || '—'}</span>
                 </div>
 
-                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Status')}</span>
                   <div>
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${selectedParticipant.authentication_status === 'ACTIVE'
@@ -297,7 +297,7 @@ const Participants: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
+                <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Token Expiration')}</span>
                   <span className="text-xs font-semibold text-senda-main dark:text-slate-200">
                     {selectedParticipant.access_token_expiration ? new Date(selectedParticipant.access_token_expiration).toLocaleString('es-ES') : t('Not available')}
@@ -306,20 +306,20 @@ const Participants: React.FC = () => {
 
                 <div className="md:col-span-2 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Access Token')}</span>
-                  <pre className="mt-1 whitespace-normal break-all rounded-xl p-3 bg-white dark:bg-senda-dark border border-senda-border dark:border-senda-darkborder font-mono text-[11px] text-senda-main dark:text-slate-300">
+                  <pre className="mt-1 whitespace-normal break-all rounded-xl p-2 sm:p-3 bg-white dark:bg-senda-dark border border-senda-border dark:border-senda-darkborder font-mono text-[10px] sm:text-[11px] text-senda-main dark:text-slate-300">
                     {selectedParticipant.access_token || t('Not available')}
                   </pre>
                 </div>
 
                 <div className="md:col-span-2 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Refresh Token')}</span>
-                  <pre className="mt-1 whitespace-normal break-all rounded-xl p-3 bg-white dark:bg-senda-dark border border-senda-border dark:border-senda-darkborder font-mono text-[11px] text-senda-main dark:text-slate-300">
+                  <pre className="mt-1 whitespace-normal break-all rounded-xl p-2 sm:p-3 bg-white dark:bg-senda-dark border border-senda-border dark:border-senda-darkborder font-mono text-[10px] sm:text-[11px] text-senda-main dark:text-slate-300">
                     {selectedParticipant.refresh_token || t('Not available')}
                   </pre>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-senda-border dark:border-senda-darkborder">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 pt-3 sm:pt-2 border-t border-senda-border dark:border-senda-darkborder">
                 <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={async () => {
@@ -343,7 +343,7 @@ const Participants: React.FC = () => {
                         alert(t('Server connection error'));
                       }
                     }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-5 py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -353,7 +353,7 @@ const Participants: React.FC = () => {
 
                   <a
                     href={`${API_URL}/auth/login/`}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/50 px-5 py-3 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition cursor-pointer shadow-sm"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/50 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition cursor-pointer"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -364,7 +364,7 @@ const Participants: React.FC = () => {
 
                 <button
                   onClick={() => setSelectedParticipant(null)}
-                  className="w-full sm:w-auto rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-6 py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
                 >
                   {t('Close')}
                 </button>

@@ -144,7 +144,7 @@ const Fitbits: React.FC = () => {
         }}
       />
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-4">
         {[
           {
             statusKey: 'IN_USE',
@@ -195,18 +195,19 @@ const Fitbits: React.FC = () => {
                 setSelectedStatusFilter(isSelected ? 'ALL' : item.statusKey);
                 setCurrentPage(1);
               }}
-              className={`cursor-pointer rounded-2xl border ${item.backgroundColor} p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 text-center ${item.hoverShadow} ${isSelected ? item.activeRing : item.borderColor
+              className={`cursor-pointer rounded-2xl border ${item.backgroundColor} p-3 sm:p-5 shadow-sm transition-all duration-200 text-center ${item.hoverShadow} ${isSelected ? item.activeRing : item.borderColor
                 }`}
             >
-              <p className={`text-[11px] font-extrabold uppercase tracking-[0.25em] ${item.textColor}`}>
+              <p className={`text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] leading-tight ${item.textColor}`}>
                 {item.label}
               </p>
-              <p className="mt-2 text-3xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>{item.value}</p>
+              <p className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-extrabold text-senda-main dark:text-white" style={{ fontFamily: 'Fraunces, serif' }}>
+                {item.value}
+              </p>
             </div>
           );
         })}
       </div>
-
       <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-6 shadow-xl space-y-6 transition-colors duration-300">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full">

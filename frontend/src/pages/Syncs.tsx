@@ -168,18 +168,32 @@ const Syncs: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-3xl border border-emerald-200/80 dark:border-emerald-900 bg-white dark:bg-senda-card p-5 shadow-xl shadow-emerald-100/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 text-center">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-emerald-600 dark:text-emerald-400">{t('Success Metric')}</p>
-          <p className="mt-2 text-3xl font-extrabold text-emerald-800 dark:text-emerald-300">{metrics.success}</p>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="rounded-2xl sm:rounded-3xl border border-emerald-200/80 dark:border-emerald-900 bg-white dark:bg-senda-card p-3 sm:p-5 shadow-lg shadow-emerald-100/40 dark:shadow-none transition-all duration-200 text-center">
+          <p className="text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] text-emerald-600 dark:text-emerald-400 leading-tight">
+            {t('Success Metric')}
+          </p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-extrabold text-emerald-800 dark:text-emerald-300">
+            {metrics.success}
+          </p>
         </div>
-        <div className="rounded-3xl border border-rose-200/80 dark:border-rose-900 bg-white dark:bg-senda-card p-5 shadow-xl shadow-rose-100/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 text-center">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400">{t('Error Metric')}</p>
-          <p className="mt-2 text-3xl font-extrabold text-rose-800 dark:text-rose-300">{metrics.error}</p>
+
+        <div className="rounded-2xl sm:rounded-3xl border border-rose-200/80 dark:border-rose-900 bg-white dark:bg-senda-card p-3 sm:p-5 shadow-lg shadow-rose-100/40 dark:shadow-none transition-all duration-200 text-center">
+          <p className="text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] text-rose-600 dark:text-rose-400 leading-tight">
+            {t('Error Metric')}
+          </p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-extrabold text-rose-800 dark:text-rose-300">
+            {metrics.error}
+          </p>
         </div>
-        <div className="rounded-3xl border border-blue-200/80 dark:border-blue-900 bg-white dark:bg-senda-card p-5 shadow-xl shadow-blue-100/40 dark:shadow-none transition-all duration-200 hover:-translate-y-1 text-center">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.25em] text-blue-600 dark:text-blue-400">{t('Total Metric')}</p>
-          <p className="mt-2 text-3xl font-extrabold text-blue-800 dark:text-blue-300">{metrics.total}</p>
+
+        <div className="rounded-2xl sm:rounded-3xl border border-blue-200/80 dark:border-blue-900 bg-white dark:bg-senda-card p-3 sm:p-5 shadow-lg shadow-blue-100/40 dark:shadow-none transition-all duration-200 text-center">
+          <p className="text-[9px] sm:text-[11px] font-extrabold uppercase tracking-[0.08em] sm:tracking-[0.25em] text-blue-600 dark:text-blue-400 leading-tight">
+            {t('Total Metric')}
+          </p>
+          <p className="mt-1 sm:mt-2 text-xl sm:text-3xl font-extrabold text-blue-800 dark:text-blue-300">
+            {metrics.total}
+          </p>
         </div>
       </div>
 
@@ -188,31 +202,28 @@ const Syncs: React.FC = () => {
           <div className="flex items-center gap-1.5 bg-senda-light dark:bg-senda-input p-1 rounded-xl border border-senda-border dark:border-senda-darkborder">
             <button
               onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                statusFilter === 'ALL' 
-                  ? 'bg-white dark:bg-senda-darkborder text-senda-main dark:text-white shadow-sm' 
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === 'ALL'
+                  ? 'bg-white dark:bg-senda-darkborder text-senda-main dark:text-white shadow-sm'
                   : 'text-[#6B6F66] dark:text-[#9AA093] hover:text-senda-main dark:hover:text-white'
-              }`}
+                }`}
             >
               {t('All')}
             </button>
             <button
               onClick={() => { setStatusFilter('SUCCESS'); setCurrentPage(1); }}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                statusFilter === 'SUCCESS' 
-                  ? 'bg-white dark:bg-senda-darkborder text-emerald-700 dark:text-emerald-300 shadow-sm' 
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === 'SUCCESS'
+                  ? 'bg-white dark:bg-senda-darkborder text-emerald-700 dark:text-emerald-300 shadow-sm'
                   : 'text-[#6B6F66] dark:text-[#9AA093] hover:text-senda-main dark:hover:text-white'
-              }`}
+                }`}
             >
               {t('Successes')}
             </button>
             <button
               onClick={() => { setStatusFilter('ERROR'); setCurrentPage(1); }}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                statusFilter === 'ERROR' 
-                  ? 'bg-white dark:bg-senda-darkborder text-rose-700 dark:text-rose-300 shadow-sm' 
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${statusFilter === 'ERROR'
+                  ? 'bg-white dark:bg-senda-darkborder text-rose-700 dark:text-rose-300 shadow-sm'
                   : 'text-[#6B6F66] dark:text-[#9AA093] hover:text-senda-main dark:hover:text-white'
-              }`}
+                }`}
             >
               {t('Errors')}
             </button>
@@ -290,11 +301,10 @@ const Syncs: React.FC = () => {
                       <td className="px-6 py-4 text-xs font-semibold text-senda-main dark:text-slate-200 truncate" title={accountEmail}>{accountEmail}</td>
                       <td className="px-6 py-4 text-xs text-[#6B6F66] dark:text-[#9AA093]">{new Date(sync.sync_date).toLocaleString('es-ES')}</td>
                       <td className="px-6 py-4 text-xs">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-semibold border ${
-                          isSuccess
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-semibold border ${isSuccess
                             ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
                             : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
-                        }`}>
+                          }`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${isSuccess ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
                           {sync.result}
                         </span>

@@ -37,7 +37,7 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
       - HTTP_PROXY=http://proxy.int.local:3128
       - HTTPS_PROXY=http://proxy.int.local:3128
-      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,senda.sendaproject.es,172.17.0.1,.int.local
+      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,150.214.230.66,senda.us.es,senda.sendaproject.es,172.17.0.1,.int.local
 
   celery_worker:
     image: senda-celery_worker
@@ -71,7 +71,7 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
       - HTTP_PROXY=http://proxy.int.local:3128
       - HTTPS_PROXY=http://proxy.int.local:3128
-      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,senda.sendaproject.es,172.17.0.1,.int.local
+      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,150.214.230.66,senda.us.es,senda.sendaproject.es,172.17.0.1,.int.local
 
   celery_beat:
     image: senda-celery_beat
@@ -105,7 +105,7 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
       - HTTP_PROXY=http://proxy.int.local:3128
       - HTTPS_PROXY=http://proxy.int.local:3128
-      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,senda.sendaproject.es,172.17.0.1,.int.local
+      - NO_PROXY=127.0.0.1,localhost,192.168.20.84,150.214.230.66,senda.us.es,senda.sendaproject.es,172.17.0.1,.int.local
 
   frontend:
     image: senda-frontend
