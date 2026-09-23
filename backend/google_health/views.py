@@ -238,6 +238,10 @@ def api_participants(request):
             return _validation_error(request, 'invalid_json')
 
         email = payload.get('email')
+        prefix = payload.get('prefix', 'SENDA').upper()
+
+        if prefix not in ['PILOTO', 'SENDA']:
+            prefix = 'SENDA'
 
         if not email:
             return _validation_error(request, 'missing_email')
@@ -245,12 +249,25 @@ def api_participants(request):
         if Participant.objects.filter(email__iexact=email).exists():
             return _validation_error(request, 'Email ya registrado', status=409)
 
-        total_participants = Participant.objects.count()
-        next_code_num = total_participants + 1
-        participant_code = f"SENDA_{next_code_num:03d}"
+        with transaction.atomic():
+            # Buscar el último participante que empiece por ese prefijo para calcular el correlativo
+            last_participant = Participant.objects.filter(
+                participant_code__startswith=f"{prefix}_"
+            ).order_by('-id').first()
+
+            if last_participant:
+                try:
+                    last_num = int(last_participant.participant_code.split('_')[1])
+                except (IndexError, ValueError):
+                    last_num = 0
+                next_code_num = last_num + 1
+            else:
+                next_code_num = 1
+
+        participant_code = f"{prefix}_{next_code_num:03d}"
         while Participant.objects.filter(participant_code=participant_code).exists():
             next_code_num += 1
-            participant_code = f"SENDA_{next_code_num:03d}"
+            participant_code = f"{prefix}_{next_code_num:03d}"
 
         participant = Participant.objects.create(
             participant_code=participant_code,
@@ -295,6 +312,70 @@ def api_participants_list(request):
 
 
 @csrf_exempt
+def api_participants_update(request):
+    if request.method == 'OPTIONS':
+        resp = JsonResponse({'ok': True})
+        resp['Access-Control-Allow-Methods'] = 'PUT, POST, OPTIONS'
+        resp['Access-Control-Allow-Headers'] = 'Content-Type'
+        return _add_cors_headers(request, resp)
+
+    if request.method not in ['PUT', 'POST']:
+        return _json_response(request, {'ok': False, 'error': 'method_not_allowed'}, status=405)
+
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        original_code = payload.get('original_code')
+        new_code = payload.get('participant_code')
+        new_email = payload.get('email')
+
+        if not original_code:
+            return _validation_error(request, 'missing_original_code', status=400)
+
+        participant = Participant.objects.filter(participant_code=original_code).first()
+        if not participant:
+            return _validation_error(request, 'Participant not found', status=404)
+
+        if new_code and new_code != original_code:
+            new_code = new_code.upper().strip()
+            
+            # Comprobar que empieza obligatoriamente por SENDA_ o PILOTO_
+            if not (new_code.startswith('SENDA_') or new_code.startswith('PILOTO_')):
+                return _validation_error(request, 'Participant code must start with SENDA_ or PILOTO_', status=400)
+            
+            # Formatear automáticamente la parte numérica a 3 dígitos (ej: PILOTO_7 -> PILOTO_007)
+            try:
+                prefix, num_part = new_code.split('_', 1)
+                if num_part.isdigit():
+                    new_code = f"{prefix}_{num_part.zfill(3)}"
+                else:
+                    return _validation_error(request, 'Invalid participant number format', status=400)
+            except ValueError:
+                return _validation_error(request, 'Invalid participant code format', status=400)
+
+            # Comprobar si ya existe en otro participante
+            if Participant.objects.filter(participant_code=new_code).exists():
+                return _validation_error(request, 'Participant code already exists', status=409)
+            
+            participant.participant_code = new_code
+
+        # Validar si el nuevo email ya existe en otro participante
+        if new_email:
+            new_email = new_email.lower().strip()
+            if Participant.objects.filter(email__iexact=new_email).exclude(pk=participant.pk).exists():
+                return _validation_error(request, 'Email already registered', status=409)
+            participant.email = new_email
+
+        participant.save()
+        return _json_response(request, {
+            'ok': True,
+            'participant_code': participant.participant_code,
+            'email': participant.email
+        })
+    except Exception as e:
+        return _validation_error(request, str(e), status=400)
+
+
+@csrf_exempt
 def api_fitbits_list(request):
     """Devuelve solo los códigos de los fitbits."""
     if request.method == 'OPTIONS':
@@ -312,7 +393,7 @@ def api_fitbits(request):
     now = timezone.now()
     fitbits = []
     
-    for f in Fitbit.objects.all():
+    for f in Fitbit.objects.all().order_by('fitbit_code'):
         has_active_assignment = f.assignments.filter(
             models.Q(real_end_date__isnull=True) | models.Q(real_end_date__gt=now),
             start_date__lte=now
@@ -366,6 +447,19 @@ def api_fitbits_create(request):
     if not fitbit_code:
         return _validation_error(request, 'missing_fitbit_code')
 
+    if not fitbit_code.upper().startswith('F_'):
+        return _validation_error(request, 'Fitbit code must start with F_', status=400)
+
+    # Formatear automáticamente la parte numérica a 3 dígitos
+    try:
+        prefix, num_part = fitbit_code.split('_', 1)
+        if num_part.isdigit():
+            fitbit_code = f"F_{num_part.zfill(3)}"
+        else:
+            return _validation_error(request, 'Invalid Fitbit number format', status=400)
+    except ValueError:
+        return _validation_error(request, 'Invalid Fitbit code format', status=400)
+    
     if Fitbit.objects.filter(fitbit_code=fitbit_code).exists():
         return _validation_error(request, 'Fitbit code already exists', status=409)
 
@@ -405,6 +499,53 @@ def api_fitbits_update_status(request):
         fitbit.save(update_fields=['status'])
 
         return _json_response(request, {'ok': True, 'fitbit_code': fitbit.fitbit_code, 'status': fitbit.status})
+    except Exception as e:
+        return _validation_error(request, str(e), status=400)
+
+
+@csrf_exempt
+def api_fitbits_update_code(request):
+    if request.method == 'OPTIONS':
+        resp = JsonResponse({'ok': True})
+        resp['Access-Control-Allow-Methods'] = 'PUT, POST, OPTIONS'
+        resp['Access-Control-Allow-Headers'] = 'Content-Type'
+        return _add_cors_headers(request, resp)
+
+    if request.method not in ['PUT', 'POST']:
+        return _json_response(request, {'ok': False, 'error': 'method_not_allowed'}, status=405)
+
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        original_code = payload.get('original_code')
+        new_code = payload.get('fitbit_code')
+
+        if not original_code or not new_code:
+            return _validation_error(request, 'missing_required_fields', status=400)
+
+        if not new_code.upper().startswith('F_'):
+            return _validation_error(request, 'Fitbit code must start with F_', status=400)
+
+        # Formatear automáticamente la parte numérica a 3 dígitos
+        try:
+            prefix, num_part = new_code.split('_', 1)
+            if num_part.isdigit():
+                new_code = f"F_{num_part.zfill(3)}"
+            else:
+                return _validation_error(request, 'Invalid Fitbit number format', status=400)
+        except ValueError:
+            return _validation_error(request, 'Invalid Fitbit code format', status=400)
+        
+        fitbit = Fitbit.objects.filter(fitbit_code=original_code).first()
+        if not fitbit:
+            return _validation_error(request, 'Fitbit not found', status=404)
+
+        if new_code != original_code:
+            if Fitbit.objects.filter(fitbit_code=new_code).exists():
+                return _validation_error(request, 'Fitbit code already exists', status=409)
+            fitbit.fitbit_code = new_code
+
+        fitbit.save(update_fields=['fitbit_code'])
+        return _json_response(request, {'ok': True, 'fitbit_code': fitbit.fitbit_code})
     except Exception as e:
         return _validation_error(request, str(e), status=400)
 
@@ -555,11 +696,27 @@ def api_assignments_update(request):
         payload = json.loads(request.body.decode('utf-8'))
         assignment_id = payload.get('id')
         assignment = Assignment.objects.get(id=assignment_id)
+
+        p_code = payload.get('participant_code')
+        if p_code:
+            participant = Participant.objects.filter(participant_code=p_code).first()
+            if not participant:
+                return _validation_error(request, 'Participant not found', status=404)
+            assignment.participant = participant
+
+        f_code = payload.get('fitbit_code')
+        if f_code:
+            fitbit = Fitbit.objects.filter(fitbit_code=f_code).first()
+            if not fitbit:
+                return _validation_error(request, 'Fitbit not found', status=404)
+            assignment.fitbit = fitbit
+
         assignment.start_date = datetime.fromisoformat(payload.get('start_date'))
         assignment.estimated_end_date = datetime.fromisoformat(payload.get('estimated_end_date')) if payload.get('estimated_end_date') else None
         real_end = payload.get('real_end_date')
         assignment.real_end_date = datetime.fromisoformat(real_end) if real_end else None
         assignment.save()
+        
         return _json_response(request, {'ok': True})
     except Exception as e:
         return _validation_error(request, str(e), status=400)

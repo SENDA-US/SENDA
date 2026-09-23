@@ -24,16 +24,21 @@ const Participants: React.FC = () => {
   const [oauthModalVisible, setOauthModalVisible] = useState(false);
   const [oauthModalMessage, setOauthModalMessage] = useState('');
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
+  const [originalCode, setOriginalCode] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
 
   const [pageSize, setPageSize] = useState<number>(() => {
     const savedSize = localStorage.getItem('participants_page_size');
     return savedSize ? Number(savedSize) : 10;
   });
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [selectedPrefix, setSelectedPrefix] = useState<string>('SENDA');
 
   const loadParticipants = () => {
     fetch(`${API_URL}/api/participants/`, { credentials: 'include' })
@@ -106,7 +111,7 @@ const Participants: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: newEmail.trim() }),
+        body: JSON.stringify({ email: newEmail.trim(), prefix: selectedPrefix }),
       });
 
       const data = await response.json();
@@ -128,10 +133,15 @@ const Participants: React.FC = () => {
 
   const filtered = participants.filter((person) => {
     const emailStr = getEmail(person);
-    return (
+    const matchesQuery =
       person.participant_code.toLowerCase().includes(query.toLowerCase()) ||
-      emailStr.toLowerCase().includes(query.toLowerCase())
-    );
+      emailStr.toLowerCase().includes(query.toLowerCase());
+
+    const matchesType =
+      typeFilter === 'ALL' ||
+      person.participant_code.toUpperCase().startsWith(typeFilter.toUpperCase());
+
+    return matchesQuery && matchesType;
   });
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
@@ -178,7 +188,6 @@ const Participants: React.FC = () => {
                 </svg>
               </button>
 
-              {/* Icono con punto de estado */}
               <div className="mb-4 flex justify-center">
                 <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder shadow-[0_10px_24px_rgba(29,90,61,0.14)]">
                   <svg className="h-7 w-7 text-senda-primary dark:text-senda-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,6 +208,22 @@ const Participants: React.FC = () => {
               </p>
 
               <form onSubmit={(e) => { e.preventDefault(); handleCreateParticipant(); }} className="space-y-3.5" autoComplete="off">
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
+                    {t('Participant Type')}
+                  </label>
+                  <div className="rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-dark px-3 py-1.5">
+                    <CustomSelect
+                      value={selectedPrefix}
+                      onChange={(val) => setSelectedPrefix(String(val))}
+                      options={[
+                        { label: 'SENDA', value: 'SENDA' },
+                        { label: 'PILOTO', value: 'PILOTO' }
+                      ]}
+                      width="w-full"
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
                     {t('Email')}
@@ -276,14 +301,55 @@ const Participants: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Code')}</span>
-                  <span className="text-sm font-bold text-senda-main dark:text-white">{selectedParticipant.participant_code}</span>
-                </div>
+                  <div className="flex items-center gap-2 w-full border border-senda-border dark:border-senda-darkborder rounded-xl px-2.5 py-1.5 mt-1 bg-white dark:bg-senda-dark focus-within:border-senda-secondary transition-all">
 
+                    <select
+                      value={selectedParticipant.participant_code.startsWith('PILOTO_') ? 'PILOTO' : 'SENDA'}
+                      onChange={(e) => {
+                        const prefix = e.target.value; // 'SENDA' o 'PILOTO'
+                        const digits = selectedParticipant.participant_code.replace(/\D/g, '').padStart(3, '0');
+                        setSelectedParticipant({ ...selectedParticipant, participant_code: `${prefix}_${digits}` });
+                      }}
+                      className="bg-senda-light dark:bg-senda-input text-senda-primary dark:text-senda-accent font-bold text-xs rounded-lg px-2 py-1 outline-none cursor-pointer border border-senda-border dark:border-senda-darkborder"
+                    >
+                      <option value="SENDA">SENDA</option>
+                      <option value="PILOTO">PILOTO</option>
+                    </select>
+
+                    <span className="text-senda-secondary font-bold">_</span>
+
+                    {/* Input numérico estricto de 3 dígitos */}
+                    <input
+                      type="text"
+                      value={selectedParticipant.participant_code.replace(/^(SENDA_|PILOTO_)/, '')}
+                      onChange={(e) => {
+                        const prefix = selectedParticipant.participant_code.startsWith('PILOTO_') ? 'PILOTO' : 'SENDA';
+                        const digits = e.target.value.replace(/\D/g, '');
+                        setSelectedParticipant({ ...selectedParticipant, participant_code: `${prefix}_${digits}` });
+                      }}
+                      onBlur={(e) => {
+                        const prefix = selectedParticipant.participant_code.startsWith('PILOTO_') ? 'PILOTO' : 'SENDA';
+                        const digits = e.target.value.replace(/\D/g, '');
+                        if (digits) {
+                          const padded = digits.padStart(3, '0');
+                          setSelectedParticipant({ ...selectedParticipant, participant_code: `${prefix}_${padded}` });
+                        }
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-senda-main dark:text-white outline-none"
+                      placeholder="001"
+                      maxLength={5}
+                    />
+                  </div>
+                </div>
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Email')}</span>
-                  <span className="text-xs font-semibold text-senda-main dark:text-slate-200">{selectedParticipant.email || '—'}</span>
+                  <input
+                    type="email"
+                    value={selectedParticipant.email || ''}
+                    onChange={(e) => setSelectedParticipant({ ...selectedParticipant, email: e.target.value })}
+                    className="w-full text-xs font-semibold text-senda-main dark:text-slate-200 bg-transparent outline-none border border-senda-border dark:border-senda-darkborder rounded-xl px-3 py-2 mt-1 focus:border-senda-secondary transition-all"
+                  />
                 </div>
-
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-3 sm:p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Status')}</span>
                   <div>
@@ -318,8 +384,7 @@ const Participants: React.FC = () => {
                   </pre>
                 </div>
               </div>
-
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 pt-3 sm:pt-2 border-t border-senda-border dark:border-senda-darkborder">
+              <div className="pt-5 mt-5 border-t border-senda-border dark:border-senda-darkborder flex flex-col sm:flex-row justify-between items-center gap-3">
                 <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={async () => {
@@ -343,17 +408,17 @@ const Participants: React.FC = () => {
                         alert(t('Server connection error'));
                       }
                     }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    {t('Delete Participant')}
+                    {t('Delete participant')}
                   </button>
 
                   <a
                     href={`${API_URL}/auth/login/`}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/50 px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition cursor-pointer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/50 px-4 py-2.5 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition cursor-pointer"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -362,12 +427,44 @@ const Participants: React.FC = () => {
                   </a>
                 </div>
 
-                <button
-                  onClick={() => setSelectedParticipant(null)}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-4 sm:px-5 py-2.5 sm:py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
-                >
-                  {t('Close')}
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const resp = await fetch(`${API_URL}/api/participants/update/`, {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            original_code: originalCode,
+                            participant_code: selectedParticipant.participant_code,
+                            email: selectedParticipant.email
+                          }),
+                        });
+                        const data = await resp.json();
+                        if (resp.ok) {
+                          alert(t('Participant updated successfully'));
+                          setOriginalCode(selectedParticipant.participant_code);
+                          loadParticipants();
+                        } else {
+                          alert(data.error || t('Error updating participant'));
+                        }
+                      } catch {
+                        alert(t('Server connection error'));
+                      }
+                    }}
+                    className="rounded-2xl bg-senda-primary dark:bg-senda-accent text-white dark:text-senda-dark px-5 py-2.5 text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer"
+                  >
+                    {t('Save changes')}
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedParticipant(null)}
+                    className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-5 py-2.5 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    {t('Close')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -402,6 +499,30 @@ const Participants: React.FC = () => {
       )}
 
       <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-6 shadow-xl transition-colors duration-300 space-y-6">
+
+        {/* Pestañas de filtrado rápido (All, Senda, Piloto) */}
+        <div className="flex items-center gap-2 border-b border-senda-border dark:border-senda-darkborder pb-4">
+          {[
+            { label: t('All'), value: 'ALL' },
+            { label: 'SENDA', value: 'SENDA' },
+            { label: 'PILOTO', value: 'PILOTO' }
+          ].map((tab) => {
+            const isActive = typeFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => { setTypeFilter(tab.value); setCurrentPage(1); }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${isActive
+                    ? 'bg-senda-primary dark:bg-senda-accent text-white dark:text-senda-dark shadow-sm'
+                    : 'bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-[#9AA093] hover:bg-green-[#A5B8A5] dark:hover:bg-slate-700'
+                  }`}
+              >
+                {t(tab.label)}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400">
@@ -452,7 +573,10 @@ const Participants: React.FC = () => {
                   return (
                     <tr
                       key={participant.participant_code}
-                      onClick={() => setSelectedParticipant(participant)}
+                      onClick={() => {
+                        setSelectedParticipant(participant);
+                        setOriginalCode(participant.participant_code);
+                      }}
                       className="cursor-pointer transition-all duration-200 hover:bg-senda-light/80 dark:hover:bg-senda-dark/50 hover:shadow-[inset_3px_0_0_0_theme(colors.senda-primary)] dark:hover:shadow-[inset_3px_0_0_0_theme(colors.senda-accent)]"
                     >
                       <td className="px-6 py-4 text-xs font-bold text-senda-main dark:text-white flex items-center gap-3">
@@ -498,7 +622,7 @@ const Participants: React.FC = () => {
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium bg-[#DCEBE1]/50 dark:bg-slate-800 text-senda-primary dark:text-senda-accent border border-[#8DC29A]/30">
                             <svg className="h-3.5 w-3.5 text-senda-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" data-testid="svg-path" />
                             </svg>
                             {t('No token')}
                           </span>

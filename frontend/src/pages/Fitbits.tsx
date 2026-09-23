@@ -26,6 +26,7 @@ const Fitbits: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [selectedFitbit, setSelectedFitbit] = useState<FitbitItem | null>(null);
+  const [originalCode, setOriginalCode] = useState('');
 
   const [pageSize, setPageSize] = useState<number>(() => {
     const savedSize = localStorage.getItem('fitbits_page_size');
@@ -41,6 +42,12 @@ const Fitbits: React.FC = () => {
       })
       .then((data) => {
         const items = data.items || [];
+
+        // Ordenar los elementos por fitbit_code de forma ascendente (F_001, F_002...)
+        items.sort((a: FitbitItem, b: FitbitItem) =>
+          a.fitbit_code.localeCompare(b.fitbit_code, undefined, { numeric: true })
+        );
+
         setFitbits(items);
         setSummary(data.counts || { in_use: 0, free: 0, maintenance: 0, inactive: 0 });
 
@@ -270,7 +277,10 @@ const Fitbits: React.FC = () => {
                   return (
                     <tr
                       key={fitbit.fitbit_code}
-                      onClick={() => setSelectedFitbit(fitbit)}
+                      onClick={() => {
+                        setSelectedFitbit(fitbit);
+                        setOriginalCode(fitbit.fitbit_code);
+                      }}
                       className="cursor-pointer transition-all duration-200 hover:bg-senda-light/80 dark:hover:bg-senda-dark/50 hover:shadow-[inset_3px_0_0_0_theme(colors.senda-primary)] dark:hover:shadow-[inset_3px_0_0_0_theme(colors.senda-accent)]"
                     >
                       <td className="px-6 py-4 text-xs font-bold text-senda-main dark:text-white flex items-center gap-3">
@@ -323,7 +333,6 @@ const Fitbits: React.FC = () => {
                 </svg>
               </button>
 
-              {/* Icono con punto de estado */}
               <div className="mb-4 flex justify-center">
                 <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-[#DCEBE1] dark:bg-senda-darkborder shadow-[0_10px_24px_rgba(29,90,61,0.14)]">
                   <svg className="h-7 w-7 text-senda-primary dark:text-senda-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,22 +355,22 @@ const Fitbits: React.FC = () => {
               <form onSubmit={handleCreateFitbit} className="space-y-3.5" autoComplete="off">
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
-                    {t('Automatic Code')}
+                    {t('Fitbit Code')}
                   </label>
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-input px-3.5 py-2.5 opacity-80">
-                    <svg className="h-4 w-4 shrink-0 text-[#A2AEA7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                    </svg>
+                  <div className="flex items-center gap-1 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3.5 py-2.5">
+                    <span className="text-sm font-bold text-senda-primary dark:text-senda-accent select-none">F_</span>
                     <input
                       type="text"
-                      value={nextCode}
-                      disabled
-                      className="w-full bg-transparent text-sm font-semibold text-slate-500 dark:text-slate-400 outline-none cursor-not-allowed"
+                      value={nextCode.replace('F_', '')}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        setNextCode(`F_${digits}`);
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-senda-main dark:text-white outline-none"
+                      placeholder="001"
                     />
                   </div>
                 </div>
-
-
                 <div>
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.1em] text-senda-secondary dark:text-senda-accent">
                     {t('Operational Status')}
@@ -434,7 +443,26 @@ const Fitbits: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
                   <span className="text-[11px] font-medium text-senda-secondary dark:text-senda-accent mb-1">{t('Code')}</span>
-                  <span className="text-sm font-bold text-senda-main dark:text-white">{selectedFitbit.fitbit_code}</span>
+                  <div className="flex items-center gap-1 w-full text-sm font-bold text-senda-main dark:text-white bg-transparent outline-none border border-senda-border dark:border-senda-darkborder rounded-xl px-3 py-2 mt-1 focus-within:border-senda-secondary transition-all">
+                    <span className="text-sm font-bold text-senda-primary dark:text-senda-accent select-none">F_</span>
+                    <input
+                      type="text"
+                      value={selectedFitbit.fitbit_code.replace('F_', '')}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        setSelectedFitbit({ ...selectedFitbit, fitbit_code: `F_${digits}` });
+                      }}
+                      onBlur={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        if (digits) {
+                          const padded = digits.padStart(3, '0');
+                          setSelectedFitbit({ ...selectedFitbit, fitbit_code: `F_${padded}` });
+                        }
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-senda-main dark:text-white outline-none"
+                      placeholder="001"
+                    />
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/70 dark:bg-senda-input/50 p-4 flex flex-col justify-center">
@@ -483,7 +511,7 @@ const Fitbits: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-senda-border dark:border-senda-darkborder">
+              <div className="pt-5 mt-5 border-t border-senda-border dark:border-senda-darkborder flex flex-col sm:flex-row justify-between items-center gap-3">
                 <button
                   onClick={async () => {
                     if (!selectedFitbit) return;
@@ -506,17 +534,52 @@ const Fitbits: React.FC = () => {
                       alert(t('Server connection error'));
                     }
                   }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-5 py-3 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer"
                 >
                   {t('Delete Fitbit')}
                 </button>
 
-                <button
-                  onClick={() => setSelectedFitbit(null)}
-                  className="w-full sm:w-auto rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-6 py-3 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
-                >
-                  {t('Close')}
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Formatear estrictamente a 3 dígitos antes de enviar
+                        const digits = selectedFitbit.fitbit_code.replace('F_', '').replace(/\D/g, '');
+                        const formattedCode = `F_${digits.padStart(3, '0')}`;
+
+                        const resp = await fetch(`${API_URL}/api/fitbits/update/code/`, {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            original_code: originalCode,
+                            fitbit_code: formattedCode
+                          }),
+                        });
+                        const data = await resp.json();
+                        if (resp.ok) {
+                          alert(t('Fitbit updated successfully'));
+                          setOriginalCode(formattedCode);
+                          loadFitbits();
+                        } else {
+                          alert(data.error || t('Error updating fitbit code'));
+                        }
+                      } catch {
+                        alert(t('Server connection error'));
+                      }
+                    }}
+                    className="rounded-2xl bg-senda-primary dark:bg-senda-accent text-white dark:text-senda-dark px-5 py-2.5 text-xs font-bold shadow-md hover:opacity-90 transition cursor-pointer"
+                  >
+                    {t('Save Changes')}
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedFitbit(null)}
+                    className="rounded-2xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-5 py-2.5 text-xs font-bold text-senda-main dark:text-slate-300 hover:bg-senda-light dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    {t('Close')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

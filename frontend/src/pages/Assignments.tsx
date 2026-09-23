@@ -18,6 +18,9 @@ type AssignmentItem = {
   status: string;
 };
 
+type SortField = 'participant' | 'fitbit' | 'start_date' | 'estimated_end_date' | 'real_end_date' | 'status';
+type SortDirection = 'asc' | 'desc';
+
 const Assignments: React.FC = () => {
   const { t } = useTranslation();
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
@@ -27,10 +30,15 @@ const Assignments: React.FC = () => {
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [sortField, setSortField] = useState<SortField>('participant');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentItem | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [editParticipantCode, setEditParticipantCode] = useState('');
+  const [editFitbitCode, setEditFitbitCode] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
   const [editEstimatedEndDate, setEditEstimatedEndDate] = useState('');
   const [editRealEndDate, setEditRealEndDate] = useState('');
@@ -112,6 +120,16 @@ const Assignments: React.FC = () => {
     return 'N/A';
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
   const handleCreateAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -171,6 +189,8 @@ const Assignments: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedAssignment.id,
+          participant_code: editParticipantCode.trim(),
+          fitbit_code: editFitbitCode.trim(),
           start_date: editStartDate,
           estimated_end_date: editEstimatedEndDate || null,
           real_end_date: editRealEndDate || null,
@@ -205,14 +225,61 @@ const Assignments: React.FC = () => {
     }
   };
 
-  const filtered = assignments.filter((item) => {
-    const pCode = getParticipantCode(item).toLowerCase();
-    const fCode = getFitbitCode(item).toLowerCase();
-    const statusStr = item.status ? item.status.toLowerCase() : '';
-    const searchLower = query.toLowerCase();
+  const filtered = assignments
+    .filter((item) => {
+      const pCode = getParticipantCode(item).toLowerCase();
+      const fCode = getFitbitCode(item).toLowerCase();
+      const statusStr = item.status ? item.status.toLowerCase() : '';
+      const searchLower = query.toLowerCase();
 
-    return pCode.includes(searchLower) || fCode.includes(searchLower) || statusStr.includes(searchLower);
-  });
+      return pCode.includes(searchLower) || fCode.includes(searchLower) || statusStr.includes(searchLower);
+    })
+    .sort((a, b) => {
+      const codeA = getParticipantCode(a);
+      const codeB = getParticipantCode(b);
+
+      // Regla especial: 'Piloto_001' siempre va arriba del todo (si estamos ordenando por participante)
+      if (sortField === 'participant') {
+        if (codeA === 'Piloto_001') return -1;
+        if (codeB === 'Piloto_001') return 1;
+      }
+
+      let valA: any = '';
+      let valB: any = '';
+
+      switch (sortField) {
+        case 'participant':
+          valA = codeA;
+          valB = codeB;
+          break;
+        case 'fitbit':
+          valA = getFitbitCode(a);
+          valB = getFitbitCode(b);
+          break;
+        case 'start_date':
+          valA = a.start_date ? new Date(a.start_date).getTime() : 0;
+          valB = b.start_date ? new Date(b.start_date).getTime() : 0;
+          break;
+        case 'estimated_end_date':
+          valA = a.estimated_end_date ? new Date(a.estimated_end_date).getTime() : 0;
+          valB = b.estimated_end_date ? new Date(b.estimated_end_date).getTime() : 0;
+          break;
+        case 'real_end_date':
+          valA = a.real_end_date ? new Date(a.real_end_date).getTime() : 0;
+          valB = b.real_end_date ? new Date(b.real_end_date).getTime() : 0;
+          break;
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      } else {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+    });
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginatedAssignments = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -272,12 +339,72 @@ const Assignments: React.FC = () => {
             <table className="min-w-full table-fixed border-collapse text-left">
               <thead>
                 <tr className="bg-[#DCEBE1]/60 dark:bg-senda-darkborder/80 text-senda-primary dark:text-senda-accent uppercase text-[10px] tracking-wider">
-                  <th className="w-[18%] px-6 py-4 font-bold rounded-l-2xl">{t('Participants Resource')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Fitbit')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Start Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Estimated End Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold">{t('Real End Date')}</th>
-                  <th className="w-[18%] px-6 py-4 font-bold rounded-r-2xl">{t('Status')}</th>
+                  <th
+                    onClick={() => handleSort('participant')}
+                    className="w-[18%] px-6 py-4 font-bold rounded-l-2xl cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Participants Resource')}
+                      {sortField === 'participant' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('fitbit')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Fitbit')}
+                      {sortField === 'fitbit' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('start_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Start Date')}
+                      {sortField === 'start_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('estimated_end_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Estimated End Date')}
+                      {sortField === 'estimated_end_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('real_end_date')}
+                    className="w-[18%] px-6 py-4 font-bold cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Real End Date')}
+                      {sortField === 'real_end_date' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('status')}
+                    className="w-[18%] px-6 py-4 font-bold rounded-r-2xl cursor-pointer select-none hover:opacity-80 transition"
+                  >
+                    <div className="flex items-center gap-1">
+                      {t('Status')}
+                      {sortField === 'status' && (
+                        <span>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </th>
                 </tr>
               </thead>
 
@@ -292,6 +419,8 @@ const Assignments: React.FC = () => {
                       onClick={() => {
                         setSelectedAssignment(item);
                         setIsEditing(false);
+                        setEditParticipantCode(getParticipantCode(item));
+                        setEditFitbitCode(getFitbitCode(item));
                         setEditStartDate(toLocalDateTimeInput(item.start_date));
                         setEditEstimatedEndDate(toLocalDateTimeInput(item.estimated_end_date));
                         setEditRealEndDate(toLocalDateTimeInput(item.real_end_date));
@@ -643,9 +772,30 @@ const Assignments: React.FC = () => {
                 </>
               ) : (
                 <form onSubmit={handleUpdateAssignment} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm text-senda-main dark:text-slate-300 bg-senda-light dark:bg-senda-dark p-4 rounded-2xl border border-senda-border dark:border-senda-darkborder">
-                    <div><span className="text-[11px] text-[#6B6F66] dark:text-[#9AA093] block">{t('Participants Resource')}</span><strong className="text-senda-main dark:text-white">{getParticipantCode(selectedAssignment)}</strong></div>
-                    <div><span className="text-[11px] text-[#6B6F66] dark:text-[#9AA093] block">{t('Fitbit')}</span><strong className="text-blue-600 dark:text-blue-400">{getFitbitCode(selectedAssignment)}</strong></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] mb-1">{t('Select Participant Label')}</label>
+                      <div className="rounded-xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 py-1.5">
+                        <CustomSelect
+                          value={editParticipantCode}
+                          onChange={(val) => setEditParticipantCode(String(val))}
+                          options={participantsList.map((code) => ({ label: code, value: code }))}
+                          width="w-full"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] mb-1">{t('Select Fitbit Label')}</label>
+                      <div className="rounded-xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-3 py-1.5">
+                        <CustomSelect
+                          value={editFitbitCode}
+                          onChange={(val) => setEditFitbitCode(String(val))}
+                          options={fitbitsList.map((code) => ({ label: code, value: code }))}
+                          width="w-full"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div>

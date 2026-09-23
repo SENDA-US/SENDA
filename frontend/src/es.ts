@@ -172,6 +172,7 @@ const es = {
     "Delete confirmation": "¿Eliminar participante",
     "Authorization Completed Title": "Autorización completada",
     "No participants found": "No se encontraron participantes",
+    "Participant Type": "Tipo de participante",
 
     // Fitbits
     "Fitbit Title": "Fitbit",
@@ -231,7 +232,7 @@ const es = {
     "Delete Assignment Confirmation": "¿Eliminar la asignación de",
     "Activa": "Activa",
     "Completada": "Completada",
-
+  
     // Physiological Data
     "Physiological Data Title": "Datos fisiológicos",
     "Physiological Subtitle": "Consulta, filtra y analiza el histórico de monitorización",

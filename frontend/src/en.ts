@@ -172,6 +172,7 @@ const en = {
     "Delete confirmation": "Delete participant",
     "Authorization Completed Title": "Authorization completed",
     "No participants found": "No participants found",
+    "Participant Type": "Participant Type",
 
     // Fitbits
     "Fitbit Title": "Fitbit",
