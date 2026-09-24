@@ -496,7 +496,7 @@ def evaluate_data_alerts(account, assignment, now, headers):
             )
 
 
-@shared_task
+@shared_task(time_limit=300, soft_time_limit=270, max_retries=0)
 def sync_all_users_data():
     accounts = GoogleAccount.objects.filter(authentication_status='ACTIVE')
     now = timezone.now()
@@ -567,42 +567,87 @@ def sync_all_users_data():
                     f"dataPoints"
                 )
 
-                try:
-                    response = requests.get(
-                        url,
-                        headers=headers,
-                        timeout=30
-                    )
+                all_points = []
+                next_page_token = None
+                endpoint_failed = False
+                token_invalid = False
+                page_count = 0
+                MAX_PAGES = 50
 
-                except requests.RequestException:
-                    continue
+                # ---- FILTRO DE FECHA ----
+                # Solo pedir los últimos 2 días para endpoints temporales
+                base_params = {}
+                if endpoint['endpoint_path'] in ['steps', 'distance', 'heart-rate', 'active-zone-minutes']:
+                    dos_dias_atras = now - timedelta(days=2)
+                    filter_field = f"{endpoint['data_key']}.interval.start_time"
+                    base_params['filter'] = f'{filter_field} >= "{dos_dias_atras.isoformat()}"'
+                # -------------------------
 
-                # ---------------------------------------------
-                # TOKEN INVÁLIDO
-                # ---------------------------------------------
-                if response.status_code in [401, 403]:
+                # ---- BUCLE DE PAGINACIÓN ----
+                while True:
+                    page_count += 1
+                    if page_count > MAX_PAGES:
+                        print(f"[WARN] {endpoint['endpoint_path']}: {MAX_PAGES} páginas alcanzadas. Cortando.")
+                        break
+
+                    params = dict(base_params)
+                    if next_page_token:
+                        params['pageToken'] = next_page_token
+                    try:
+                        response = requests.get(
+                            url,
+                            headers=headers,
+                            params=params,
+                            timeout=30
+                        )
+                    except requests.RequestException as e:
+                        print(f"[ERROR] {endpoint['endpoint_path']}: requests falló: {e}")
+                        endpoint_failed = True
+                        break
+
+                    # TOKEN INVÁLIDO
+                    if response.status_code in [401, 403]:
+                        token_invalid = True
+                        break
+
+                    # ERROR EN ESTE ENDPOINT
+                    if response.status_code != 200:
+                        print(f"[ERROR] {endpoint['endpoint_path']}: HTTP {response.status_code}")
+                        endpoint_failed = True
+                        break
+
+                    try:
+                        data = response.json()
+                    except ValueError:
+                        print(f"[ERROR] {endpoint['endpoint_path']}: JSON inválido")
+                        endpoint_failed = True
+                        break
+
+                    page_points = data.get('dataPoints', [])
+                    all_points.extend(page_points)
+                    next_page_token = data.get('nextPageToken')
+
+                    print(f"[DEBUG] {endpoint['endpoint_path']}: pág {page_count}, +{len(page_points)}, total {len(all_points)}")
+
+                    if not next_page_token:
+                        break
+
+                # ---- FIN DEL BUCLE DE PAGINACIÓN ----
+
+                if token_invalid:
                     activate_alert(
                         AlertType.TOKEN_EXPIRED,
                         google_account=account,
                         assignment=assignment,
                     )
-                    break  # Rompemos el bucle porque el token no es válido
+                    break  # Rompemos el bucle de endpoints
 
-                # ---------------------------------------------
-                # ERROR DEL SERVIDOR / API EN ESTE ENDPOINT
-                # ---------------------------------------------
-                if response.status_code != 200:
-                    continue  # Este endpoint falló, pero permitimos que los demás sigan
+                if endpoint_failed:
+                    continue  # Pasamos al siguiente endpoint
 
-                # Si la respuesta es 200 OK, sumamos un éxito
                 successful_endpoints += 1
 
-                try:
-                    data = response.json()
-                except ValueError:
-                    continue
-
-                points = data.get('dataPoints', [])
+                points = all_points
                 endpoint_downloaded = 0
 
                 # =================================================
@@ -760,48 +805,52 @@ def sync_all_users_data():
             # 4. GUARDAR TOTALES DIARIOS DE STEPS Y DISTANCE
             # =====================================================
 
-            for (
-                variable_type,
-                day_date
-            ), info in daily_totals.items():
+            sync_time = timezone.now()
+            today_local = timezone.localtime(sync_time).date()
 
-                existing = (
-                    PhysiologicalData.objects
-                    .filter(
-                        assignment=assignment,
-                        variable_type=variable_type,
-                        physical_time__date=day_date
-                    )
-                    .order_by('physical_time')
-                    .first()
-                )
+            for (variable_type, day_date), info in daily_totals.items():
+                # Decidir qué hora usar
+                if day_date < today_local:
+                    # Día pasado: usar 23:59:59 del día local
+                    naive_end = datetime.combine(day_date, datetime.max.time().replace(microsecond=0))
+                    physical_time_to_save = timezone.make_aware(naive_end, timezone.get_current_timezone())
+                else:
+                    # Día actual: usar la hora actual
+                    physical_time_to_save = sync_time
 
-                if existing:
+                # Buscar TODOS los registros del día para esta variable
+                todos = list(PhysiologicalData.objects.filter(
+                    assignment=assignment,
+                    variable_type=variable_type,
+                    physical_time__date=day_date
+                ).order_by('id'))
 
+                if todos:
+                    # Actualiza el primero
+                    existing = todos[0]
                     existing.metric_value = info['sum']
+                    existing.physical_time = physical_time_to_save
                     existing.start_time = info['earliest_start']
                     existing.end_time = info['latest_end']
                     existing.device_name = info['device_name']
                     existing.platform = info['platform']
                     existing.recording_method = info['recording_method']
+                    existing.save(update_fields=[
+                        'metric_value', 'physical_time', 'start_time',
+                        'end_time', 'device_name', 'platform', 'recording_method',
+                    ])
 
-                    existing.save(
-                        update_fields=[
-                            'metric_value',
-                            'start_time',
-                            'end_time',
-                            'device_name',
-                            'platform',
-                            'recording_method',
-                        ]
-                    )
-
+                    # Borrar duplicados
+                    ids_a_borrar = [r.id for r in todos[1:]]
+                    if ids_a_borrar:
+                        print(f"[INFO] Borrando {len(ids_a_borrar)} duplicados de {variable_type} en {day_date}")
+                        PhysiologicalData.objects.filter(id__in=ids_a_borrar).delete()
                 else:
-
+                    # No existe, crear
                     PhysiologicalData.objects.create(
                         assignment=assignment,
                         variable_type=variable_type,
-                        physical_time=info['earliest_start'],
+                        physical_time=physical_time_to_save,
                         metric_value=info['sum'],
                         start_time=info['earliest_start'],
                         end_time=info['latest_end'],
@@ -861,6 +910,9 @@ def sync_all_users_data():
             )
 
         except Exception as e:
+            import traceback
+            print(f"[ERROR] sync_all_users_data falló para {account.email}: {e}")
+            traceback.print_exc()
             activate_alert(
                 AlertType.SYNC_ERROR,
                 google_account=account,

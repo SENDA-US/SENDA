@@ -871,43 +871,25 @@ def api_physiological_data(request):
             assignment__participant__participant_code__in=valid_participants
         )
 
-    # =====================================================
-    # ACUMULACIÓN DE STEPS Y DISTANCE POR DÍA
-    # =====================================================
+    # ======================
+    # LECTURA DE DATOS 
+    # ======================
 
-    # Obtenemos los 500 registros más recientes de la base de datos (orden descendente)
+    # Obtenemos los registros 
     recent_qs = qs.order_by('-physical_time')[:500]
     records = list(recent_qs)
+    
+    # Ordenamos cronológicamente para la respuesta
     records.sort(key=lambda x: x.physical_time)
 
-    accumulated_values = defaultdict(float)
     items = []
 
     for item in records:
         participant = item.assignment.participant.participant_code
         fitbit = item.assignment.fitbit.fitbit_code
         variable = item.variable_type
-        day = timezone.localtime(item.physical_time).date()
         value = item.metric_value
-
-        accumulation_key = (
-            participant,
-            fitbit,
-            variable,
-            day
-        )
-
-        # Solo acumulamos STEPS y DISTANCE de forma progresiva
-        if variable in [
-            VariableType.STEPS,
-            VariableType.DISTANCE
-        ]:
-            if value is not None:
-                accumulated_values[accumulation_key] += float(value)
-
-            display_value = accumulated_values[accumulation_key]
-        else:
-            display_value = value
+        display_value = value
 
         items.append({
             'participant_code': participant,

@@ -41,16 +41,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'google_health',
     'corsheaders'
-    #'django_crontab',
 ]
 
 CORS_ALLOWED_ORIGINS = [config('FRONTEND_URL'), ]
 
 CORS_ALLOW_CREDENTIALS = True
-
-CRONJOBS = [
-    ('0 9 * * *', 'django.core.management.call_command', ['sync_physiological_data'])
-]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -139,9 +134,15 @@ CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULE = {
     'sincronizar-datos-cada-5min': {
         'task': 'google_health.tasks.sync_all_users_data',
-        'schedule': 60.0, # 60 segundos = 1 minuto (actualización de datos fisiologicos)
+        'schedule': 300.0, # 60 segundos = 1 minuto (actualización de datos fisiologicos)
     },
 }
+# Protecciones de Celery
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TIME_LIMIT = 600
+CELERY_TASK_SOFT_TIME_LIMIT = 540
 
 
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
