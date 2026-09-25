@@ -7,7 +7,7 @@ import requests
 from google_health.services import GoogleAuthService
 from google_health.models import (
     Alert, GoogleAccount, Assignment, PhysiologicalData,
-    SyncLog, VariableType, AlertType, AlertPriority, activate_alert, resolve_alert_automatically
+    SyncLog, SyncCursor, VariableType, AlertType, AlertPriority, activate_alert, resolve_alert_automatically
 )
 
 API_BASE = "https://health.googleapis.com/v4/users/me/dataTypes"
@@ -496,7 +496,7 @@ def evaluate_data_alerts(account, assignment, now, headers):
             )
 
 
-@shared_task(time_limit=300, soft_time_limit=270, max_retries=0)
+@shared_task(time_limit=1800, soft_time_limit=270, max_retries=0)
 def sync_all_users_data():
     accounts = GoogleAccount.objects.filter(authentication_status='ACTIVE')
     now = timezone.now()
@@ -567,72 +567,127 @@ def sync_all_users_data():
                     f"dataPoints"
                 )
 
+                # =====================================================
+                # 2.1. LEER CURSOR DE SINCRONIZACIÓN
+                # =====================================================
+                cursor, _ = SyncCursor.objects.get_or_create(
+                    google_account=account,
+                    endpoint=endpoint['endpoint_path'],
+                )
+
                 all_points = []
                 next_page_token = None
                 endpoint_failed = False
                 token_invalid = False
                 page_count = 0
-                MAX_PAGES = 50
+                MAX_PAGES = 5000  
+                max_seen_time = cursor.last_synced_at  
 
-                # ---- FILTRO DE FECHA ----
-                # Solo pedir los últimos 2 días para endpoints temporales
+                # =====================================================
+                # 2.2. CONSTRUIR FILTRO DE FECHA (DELTA SYNC)
+                # =====================================================
                 base_params = {}
-                if endpoint['endpoint_path'] in ['steps', 'distance', 'heart-rate', 'active-zone-minutes']:
-                    dos_dias_atras = now - timedelta(days=2)
-                    filter_field = f"{endpoint['data_key']}.interval.start_time"
-                    base_params['filter'] = f'{filter_field} >= "{dos_dias_atras.isoformat()}"'
-                # -------------------------
+                endpoint_path = endpoint['endpoint_path']
 
-                # ---- BUCLE DE PAGINACIÓN ----
+                if cursor.last_synced_at:
+                    since = cursor.last_synced_at
+                else:
+                    since = now - timedelta(days=90)
+
+                fecha_filtro = since.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+                if endpoint_path in ['steps', 'distance']:
+                    start_of_today_local = timezone.localtime(now).date()
+                    filter_field = f"{endpoint['data_key']}.interval.civil_start_time"
+                    base_params['filter'] = f'{filter_field} >= "{start_of_today_local.isoformat()}"'
+
+                elif endpoint_path == 'heart-rate':
+                    base_params['filter'] = (
+                        f'heart_rate.sample_time.physical_time >= "{fecha_filtro}"'
+                    )
+
+                elif endpoint_path == 'active-zone-minutes':
+                    base_params['filter'] = (
+                        f'active_zone_minutes.interval.start_time >= "{fecha_filtro}"'
+                    )
+
+                elif endpoint_path == 'daily-heart-rate-zones':
+                    hace_90_dias = (timezone.localtime(now) - timedelta(days=90)).date()
+                    base_params['filter'] = (
+                        f'daily_heart_rate_zones.date >= "{hace_90_dias.isoformat()}"'
+                    )
+
+                # =====================================================
+                # 2.3. BUCLE DE PAGINACIÓN
+                # =====================================================
                 while True:
                     page_count += 1
                     if page_count > MAX_PAGES:
-                        print(f"[WARN] {endpoint['endpoint_path']}: {MAX_PAGES} páginas alcanzadas. Cortando.")
+                        print(f"[WARN] {endpoint_path}: {MAX_PAGES} páginas alcanzadas")
                         break
 
                     params = dict(base_params)
                     if next_page_token:
                         params['pageToken'] = next_page_token
+
                     try:
                         response = requests.get(
-                            url,
-                            headers=headers,
-                            params=params,
-                            timeout=30
+                            url, headers=headers, params=params, timeout=30
                         )
                     except requests.RequestException as e:
-                        print(f"[ERROR] {endpoint['endpoint_path']}: requests falló: {e}")
+                        print(f"[ERROR] {endpoint_path}: requests falló: {e}")
                         endpoint_failed = True
                         break
 
-                    # TOKEN INVÁLIDO
                     if response.status_code in [401, 403]:
                         token_invalid = True
                         break
 
-                    # ERROR EN ESTE ENDPOINT
                     if response.status_code != 200:
-                        print(f"[ERROR] {endpoint['endpoint_path']}: HTTP {response.status_code}")
+                        print(f"[ERROR] {endpoint_path}: HTTP {response.status_code}")
                         endpoint_failed = True
                         break
 
                     try:
                         data = response.json()
                     except ValueError:
-                        print(f"[ERROR] {endpoint['endpoint_path']}: JSON inválido")
+                        print(f"[ERROR] {endpoint_path}: JSON inválido")
                         endpoint_failed = True
                         break
 
                     page_points = data.get('dataPoints', [])
                     all_points.extend(page_points)
+
+                    for p in page_points:
+                        pt = None
+                        if endpoint_path == 'heart-rate':
+                            pt_str = p.get('heartRate', {}).get('sampleTime', {}).get('physicalTime')
+                        elif endpoint_path in ['steps', 'distance']:
+                            inner = p.get(endpoint['data_key'], {})
+                            interval = inner.get('interval', {})
+                            pt_str = interval.get('endTime') or interval.get('startTime')
+                        else:
+                            pt_str = (
+                                p.get('sampleTime', {}).get('physicalTime')
+                                or p.get('interval', {}).get('endTime')
+                                or p.get('interval', {}).get('startTime')
+                            )
+                        if pt_str:
+                            pt = parse_time(pt_str, None)
+                            if pt and (max_seen_time is None or pt > max_seen_time):
+                                max_seen_time = pt
+
                     next_page_token = data.get('nextPageToken')
 
-                    print(f"[DEBUG] {endpoint['endpoint_path']}: pág {page_count}, +{len(page_points)}, total {len(all_points)}")
+                    if page_count == 1 or page_count % 10 == 0:
+                        print(f"[{endpoint_path}] pág {page_count}, total {len(all_points)}")
 
                     if not next_page_token:
                         break
 
-                # ---- FIN DEL BUCLE DE PAGINACIÓN ----
+                # =====================================================
+                # FIN DEL BUCLE DE PAGINACIÓN
+                # =====================================================
 
                 if token_invalid:
                     activate_alert(
@@ -640,10 +695,17 @@ def sync_all_users_data():
                         google_account=account,
                         assignment=assignment,
                     )
-                    break  # Rompemos el bucle de endpoints
+                    break  
 
                 if endpoint_failed:
-                    continue  # Pasamos al siguiente endpoint
+                    continue  
+
+                if max_seen_time:
+                    cursor.last_synced_at = max_seen_time
+                cursor.last_sync_started_at = now
+                cursor.last_sync_finished_at = timezone.now()
+                cursor.last_sync_records = len(all_points)
+                cursor.save()
 
                 successful_endpoints += 1
 

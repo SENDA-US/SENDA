@@ -134,7 +134,7 @@ CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULE = {
     'sincronizar-datos-cada-5min': {
         'task': 'google_health.tasks.sync_all_users_data',
-        'schedule': 300.0, # 60 segundos = 1 minuto (actualización de datos fisiologicos)
+        'schedule': 300.0, # 300 segundos = 5 minutos (actualización de datos fisiologicos)
     },
 }
 # Protecciones de Celery

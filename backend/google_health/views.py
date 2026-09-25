@@ -876,7 +876,7 @@ def api_physiological_data(request):
     # ======================
 
     # Obtenemos los registros 
-    recent_qs = qs.order_by('-physical_time')[:500]
+    recent_qs = qs.order_by('-physical_time')[:5000]
     records = list(recent_qs)
     
     # Ordenamos cronológicamente para la respuesta

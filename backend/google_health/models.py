@@ -304,6 +304,39 @@ class SyncLog(models.Model):
         return f"Sync {self.sync_date} - {self.result}"
 
 
+class SyncCursor(models.Model):
+    """
+    Estado de sincronización incremental por (cuenta, endpoint).
+    Guarda el timestamp del último dataPoint descargado con éxito.
+    Sirve para que cada ciclo pida a Google solo lo nuevo.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    google_account = models.ForeignKey(
+        GoogleAccount,
+        on_delete=models.CASCADE,
+        related_name='sync_cursors',
+    )
+    endpoint = models.CharField(max_length=100)
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp del último dataPoint sincronizado (UTC)',
+    )
+    last_sync_started_at = models.DateTimeField(null=True, blank=True)
+    last_sync_finished_at = models.DateTimeField(null=True, blank=True)
+    last_sync_records = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('google_account', 'endpoint')]
+        indexes = [
+            models.Index(fields=['google_account', 'endpoint']),
+        ]
+
+    def __str__(self):
+        return f"{self.google_account.email} | {self.endpoint} | {self.last_synced_at}"
+
+
 class PhysiologicalData(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='physiological_data')
