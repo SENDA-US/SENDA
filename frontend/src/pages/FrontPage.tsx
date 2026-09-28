@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Brain3D } from '../components/Brain3D';
 
 type FrontPageProps = {
@@ -76,17 +76,17 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
     {
       title: t('Pillar1 Title'),
       text: t('Pillar1 Text'),
-      icon: 'M20.8 9.2c0 5.4-8.8 10.2-8.8 10.2S3.2 14.6 3.2 9.2A4.7 4.7 0 018 4.5c1.5 0 3 .7 4 1.9a5.2 5.2 0 014-1.9 4.7 4.7 0 014.8 4.7z',
+      icon: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
     },
     {
       title: t('Pillar2 Title'),
       text: t('Pillar2 Text'),
-      icon: 'M9.5 3.5a3 3 0 00-3 3v3a3 3 0 01-3 3h-.5m15-9a3 3 0 013 3v3a3 3 0 003 3h.5M9.5 20.5a3 3 0 01-3-3v-3a3 3 0 00-3-3h-.5m15 9a3 3 0 003-3v-3a3 3 0 013-3h.5',
+      icon: 'M12 4a4 4 0 100 8 4 4 0 000-8zM4 20a4 4 0 100-8 4 4 0 000 8zM20 20a4 4 0 100-8 4 4 0 000 8zM12 12l-4 4M12 12l4 4',
     },
     {
       title: t('Pillar3 Title'),
       text: t('Pillar3 Text'),
-      icon: 'M4 19V5m0 14h16M8 16v-4m4 4V8m4 8v-7',
+      icon: 'M12 4c-4.42 0-8 1.79-8 4v8c0 2.21 3.58 4 8 4s8-1.79 8-4V8c0-2.21-3.58-4-8-4zM4 8c0 2.21 3.58 4 8 4s8-1.79 8-4M4 12c0 2.21 3.58 4 8 4s8-1.79 8-4',
     },
   ];
 
@@ -107,7 +107,7 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
 
   const checklistItems = [t('Checklist1'), t('Checklist2'), t('Checklist3')];
 
-  const metrics = [t('Metric HRV'), t('Metric Sleep'), t('Metric HeartRate'), t('Metric Activity')];
+  const metrics = [t('Metric HRV'), t('Metric Sleep'), t('Metric HeartRate'), t('Metric Activity'), t('Metric Night')];
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#F7FAF7] font-sans text-[#18352A] transition-colors duration-500 dark:bg-[#0A130F] dark:text-[#E8F0EA]">
@@ -221,7 +221,21 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
             </h1>
 
             <p className="mt-7 max-w-[600px] text-[16px] leading-[1.8] text-[#617168] dark:text-[#A9B9AE] sm:text-[17px]">
-              {t('Subtitle')}
+              <Trans
+                i18nKey="Subtitle"
+                components={{
+                  neuro: <a href="https://grupo.us.es/neurobi/" target="_blank" rel="noopener noreferrer" className="underline hover:text-senda-primary font-semibold transition-colors" />,
+                  indrho: <a href="https://grupo.us.es/grupoindrho/" target="_blank" rel="noopener noreferrer" className="underline hover:text-senda-primary font-semibold transition-colors" />
+                }}
+              />
+            </p>
+            <p className="mt-7 max-w-[600px] text-[12px] leading-[1.8] text-[#617168] dark:text-[#A9B9AE] sm:text-[13px]">
+              <Trans
+                i18nKey="Subtitle2"
+                components={{
+                  centra: <a href="https://www.centrodeestudiosandaluces.es/cea-proyectos/2132" target="_blank" rel="noopener noreferrer" className="underline hover:text-senda-primary font-semibold transition-colors" />,
+                }}
+              />
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">
@@ -335,7 +349,7 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
                     key={item}
                     className="flex items-center gap-2 rounded-xl border border-[#D9E5DC] bg-white/70 px-3 py-3 text-xs font-medium text-[#557063] dark:border-[#2B4033] dark:bg-[#142019] dark:text-[#A3B4AA]"
                   >
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#63A77E]" />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#63A77E]" />
                     {item}
                   </div>
                 ))}
@@ -353,8 +367,8 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
                   <div className="absolute inset-0 bg-gradient-to-tr from-[#092015]/60 via-transparent to-transparent" />
                   <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A8D9B9]">{t('Wearable Official')}</p>
-                      <p className="mt-1 text-lg font-semibold text-white">Fitbit Charge 6</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A8D9B9]">Fitbit</p>
+                      <p className="mt-1 text-lg font-semibold uppercase tracking-[0.22em] text-white">{t('Wearable Official')}</p>
                     </div>
                     <div className="rounded-full border border-white/20 bg-black/25 px-3 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md">
                       Google Health API
@@ -500,14 +514,17 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-[#E5E9DD] bg-white p-5 dark:border-[#394337] dark:bg-[#19221A]">
+              {/* Sistema de Alertas */}
+              <div className="mt-5 rounded-2xl border border-[#E5E9DD] bg-[#FAF9F7] p-5 dark:border-[#394337] dark:bg-[#19221A]">
                 <div className="flex items-start gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F1EEDB] font-bold text-[#8C8050] dark:bg-[#3B3825]">
-                    !
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-[#354438] dark:text-[#D8E4DB]">{t('Monitor Alert Title')}</p>
+                      <p className="text-sm font-semibold text-[#354438] dark:text-[#EAF3ED]">{t('Monitor Alert Title')}</p>
                       <span className="rounded-full bg-[#F1EEDB] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#847A4E] dark:bg-[#3B3825]">
                         {t('Monitor Alert Badge')}
                       </span>
@@ -521,11 +538,31 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
 
               <div className="mt-3 rounded-2xl border border-[#DDEAE1] bg-[#F6FAF7] p-5 dark:border-[#294335] dark:bg-[#17261D]">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#DDEEE3] font-bold text-[#43825E] dark:bg-[#234632] dark:text-[#91D1AA]">
-                    ✓
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DDEEE3] font-bold text-[#43825E] dark:bg-[#234632] dark:text-[#91D1AA]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-[#354438] dark:text-[#D8E4DB]">{t('Monitor Sync Title')}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-[#354438] dark:text-[#D8E4DB]">{t('Monitor Oauth Title')}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-[#78847C] dark:text-[#99A69D]">{t('Monitor Oauth Text')}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-[#E2E7DE] bg-[#FAFCF9] p-5 dark:border-[#313B33] dark:bg-[#151E19]">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E8ECE5] font-bold text-[#5A6E60] dark:bg-[#2C352F] dark:text-[#A4B5AB]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-[#354438] dark:text-[#D8E4DB]">{t('Monitor Sync Title')}</p>
+                    </div>
                     <p className="mt-1 text-xs text-[#78847C] dark:text-[#99A69D]">{t('Monitor Sync Text')}</p>
                   </div>
                 </div>
@@ -576,40 +613,73 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
             {t('Institutions Text')}
           </p>
 
-          <div className="mt-12 flex justify-center">
-            <div className="flex flex-col items-center justify-center gap-6 sm:flex-row sm:items-center sm:gap-8 sm:translate-x-6">
+          {/* Contenedor para los logos */}
+          <div className="mt-16 grid grid-cols-2 gap-y-12 sm:gap-x-6 lg:grid-cols-4 lg:gap-x-0">
 
-              {/* Logo de la facultad */}
-              <a
-                href="https://psicologia.us.es/investigacion"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex h-28 w-full items-center justify-center sm:w-[360px] sm:justify-end sm:pr-8"
-              >
-                <img
-                  src={darkMode ? '/images/facultad-logo-blanco.png' : '/images/facultad-logo.png'}
-                  alt={t('Faculty Logo Alt')}
-                  className="max-h-20 w-auto object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-24"
-                />
-              </a>
-
-              {/* Separador vertical */}
-              <div className="hidden h-20 w-px bg-[#DCE5DE] dark:bg-[#2C4033] sm:block" />
-
-              {/* Logo CENTRA */}
+            {/* Logo CENTRA */}
+            <div className="flex items-center justify-center lg:border-r lg:border-[#DCE5DE] lg:dark:border-[#2C4033] last:lg:border-r-0">
               <a
                 href="https://www.centrodeestudiosandaluces.es/cea-proyectos/2132"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex h-28 w-full items-center justify-center sm:w-[360px] sm:justify-start sm:pl-8"
+                className="group flex h-24 w-full items-center justify-center lg:justify-end px-6 lg:pr-8"
               >
                 <img
                   src={darkMode ? '/images/centra-dark.png' : '/images/centra-claro.png'}
                   alt={t('CENTRA Logo Alt')}
-                  className="max-h-20 w-auto object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-24"
+                  className="max-h-16 w-auto max-w-[160px] object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-20 sm:max-w-[180px]"
                 />
               </a>
             </div>
+
+            {/* Logo de la facultad */}
+            <div className="flex items-center justify-center lg:border-r lg:border-[#DCE5DE] lg:dark:border-[#2C4033] last:lg:border-r-0">
+              <a
+                href="https://psicologia.us.es/investigacion"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex h-24 w-full items-center justify-center px-6"
+              >
+                <img
+                  src={darkMode ? '/images/facultad-logo-blanco.png' : '/images/facultad-logo.png'}
+                  alt={t('Faculty Logo Alt')}
+                  className="max-h-16 w-auto max-w-[160px] object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-20 sm:max-w-[180px]"
+                />
+              </a>
+            </div>
+
+            {/* Logo del grupo Neurociencia */}
+            <div className="flex items-center justify-center lg:border-r lg:border-[#DCE5DE] lg:dark:border-[#2C4033] last:lg:border-r-0">
+              <a
+                href="https://grupo.us.es/neurobi"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex h-24 w-full items-center justify-center px-6"
+              >
+                <img
+                  src={darkMode ? '/images/wellness.jpg' : '/images/wellness.jpg'}
+                  alt="Neurociencia del Bienestar"
+                  className="max-h-16 w-auto max-w-[160px] object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-20 sm:max-w-[180px]"
+                />
+              </a>
+            </div>
+
+            {/* Logo INDHRO */}
+            <div className="flex items-center justify-center last:lg:border-r-0">
+              <a
+                href="https://grupo.us.es/grupoindrho/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex h-24 w-full items-center justify-center px-6"
+              >
+                <img
+                  src={darkMode ? '/images/Indhro-negativo.png' : '/images/Indhropositivo.png'}
+                  alt="INDHRO"
+                  className="max-h-16 w-auto max-w-[160px] object-contain opacity-75 transition-all duration-300 group-hover:scale-105 group-hover:opacity-100 sm:max-h-20 sm:max-w-[180px]"
+                />
+              </a>
+            </div>
+
           </div>
         </div>
       </section>
@@ -641,8 +711,11 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
               >
                 {t('CTA Heading')}
               </h2>
-              <p className="mt-5 max-w-[500px] text-[15px] leading-7 text-[#B9CFC1]">
+              <p className="mt-5 max-w-[550px] text-[15px] leading-7 text-[#B9CFC1]">
                 {t('CTA Text')}
+              </p>
+              <p className="mt-5 max-w-[500px] text-[13px] leading-7 text-[#E3A1A9]">
+                {t('CTA Text2')}
               </p>
               <div className="mt-9 flex flex-wrap items-center gap-6">
                 <button
@@ -677,10 +750,6 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
                     alt={t('Fitbit Image Alt')}
                     className="mx-auto block max-h-[220px] w-auto rounded-xl object-contain transition-transform duration-500 hover:scale-105"
                   />
-                  <div className="mt-5 rounded-xl bg-black/20 px-6 py-3 text-center">
-                    <span className="text-[12px] text-[#B9CFC1]">Fitbit Charge </span>
-                    <span className="text-[13px] font-semibold text-white">6</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -690,19 +759,30 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
 
       {/* FOOTER */}
       <footer className="border-t border-[#DCE6DF] bg-white dark:border-[#273A2E] dark:bg-[#101B15]">
-        <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-3 px-6 py-10 text-[11px] text-[#8A958E] dark:text-[#77877D] sm:flex-row sm:px-10 lg:px-14">
-          <span>
-            © {new Date().getFullYear()} {t('FooterText')}
-          </span>
-          <div className="flex items-center gap-2">
-            <svg className="h-3.5 w-3.5 text-[#87938C] dark:text-[#7E9085]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            {t('Secure Access')}
+        <div className="mx-auto max-w-[1180px] px-6 py-8 text-[11px] text-[#8A958E] dark:text-[#77877D] sm:px-10 lg:px-14">
+          <div className="flex flex-col items-start space-y-1.5">
+            <span className=" font-medium text-[#354438] dark:text-[#D8E4DB]">
+              {t('FooterProject')}
+            </span>
+            <span>
+              {t('FooterFunding')}
+            </span>
+            <span>
+              {t('FooterVersion')}
+            </span>
+            <span>
+              {t('FooterRights')}
+            </span>
+            <div className="flex items-center gap-2 pt-0.5">
+              <a href="#privacy" className="hover:underline transition-colors">{t('Privacy')}</a>
+              <span>·</span>
+              <a href="#dataprotection" className="hover:underline transition-colors">{t('DataProtection')}</a>
+              <span>·</span>
+              <a href="#legal" className="hover:underline transition-colors">{t('LegalNotice')}</a>
+            </div>
           </div>
         </div>
       </footer>
-
     </div>
   );
 };
