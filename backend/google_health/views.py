@@ -2186,7 +2186,7 @@ def api_admin_create_researcher(request):
                                                 <tr>
                                                     <td style="vertical-align: middle;">
                                                         <img 
-                                                            src="https://sendaproject.es/images/senda.png" 
+                                                            src="https://senda.us.es/images/senda.png" 
                                                             alt="SENDA" 
                                                             width="150" 
                                                             style="display: block; border: 0; outline: none; text-decoration: none; max-height: 75px; width: auto;" />
@@ -2267,7 +2267,7 @@ def api_admin_create_researcher(request):
     """
 
     subject = 'Autorización como investigador/a en SENDA'
-    from_email = f"SENDA <{config('DEFAULT_FROM_EMAIL', default='admin@sendaproject.es')}>"
+    from_email = config('DEFAULT_FROM_EMAIL')
     text_content = f"Hola,\n\nTe han autorizado como investigador/a en SENDA.\n\nAcepta la autorización aquí: {yes_url}\nO recházala aquí: {no_url}\n\nAtentamente,\nEquipo SENDA"
 
     email_msg = EmailMultiAlternatives(
@@ -2275,6 +2275,7 @@ def api_admin_create_researcher(request):
         body=text_content,
         from_email=from_email,
         to=[email],
+        reply_to=['admin@sendaproject.es'],
     )
     email_msg.attach_alternative(html_content, "text/html")
     email_msg.send(fail_silently=False)
@@ -2396,7 +2397,7 @@ def api_researcher_request_code(request):
                                                 <tr>
                                                     <td style="vertical-align: middle;">
                                                         <img 
-                                                            src="https://sendaproject.es/images/senda.png" 
+                                                            src="https://senda.us.es/images/senda.png" 
                                                             alt="SENDA" 
                                                             width="150" 
                                                             style="display: block; border: 0; outline: none; text-decoration: none; max-height: 75px; width: auto;" />
@@ -2477,6 +2478,7 @@ def api_researcher_request_code(request):
         body=text_content,
         from_email=from_email,
         to=[email],
+        reply_to=['admin@sendaproject.es'],  
     )
     email_msg.attach_alternative(html_content, "text/html")
     email_msg.send(fail_silently=False)
