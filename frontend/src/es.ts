@@ -148,6 +148,7 @@ const es = {
     "method_not_allowed": "Método no permitido",
     "invalid_json": "Formato de datos incorrecto",
     "missing_credentials": "Faltan datos de acceso",
+    'email_not_authorized': "Email no autorizado",
 
     // Participants
     "Participants Title": "Participantes",

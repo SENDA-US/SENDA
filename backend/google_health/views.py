@@ -26,7 +26,41 @@ from django.conf import settings
 from collections import defaultdict
 from django.contrib.auth import get_user_model
 from django.db import transaction
+import logging
+logger = logging.getLogger(__name__)
 
+def _parse_iso_param(v):
+    """
+    Devuelve una tupla (kind, value):
+      - ('date', date)          → el usuario dio solo fecha ('YYYY-MM-DD')
+      - ('datetime', datetime)  → el usuario dio fecha + hora ('YYYY-MM-DDTHH:MM')
+      - (None, None)            → vacío o inválido
+    El datetime que devuelve es siempre timezone-aware.
+    """
+    if not v:
+        return (None, None)
+
+    v = v.strip()
+
+    # Caso 1: solo fecha
+    if len(v) == 10:
+        try:
+            return ('date', datetime.strptime(v, '%Y-%m-%d').date())
+        except ValueError:
+            logger.warning("[DATE] Fecha no parseable: %r", v)
+            return (None, None)
+
+    # Caso 2: fecha con hora
+    try:
+        dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+    except ValueError:
+        logger.warning("[DATE] Fecha/hora no parseable: %r", v)
+        return (None, None)
+
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+    return ('datetime', dt)
 
 User = get_user_model()
 
@@ -816,21 +850,20 @@ def api_physiological_data(request):
     # -----------------------------------------------------
     # FILTRAR POR FECHAS
     # -----------------------------------------------------
-    if date_from:
-        try:
-            qs = qs.filter(
-                physical_time__gte=datetime.fromisoformat(date_from)
-            )
-        except ValueError:
-            pass
+    kind_from, val_from = _parse_iso_param(date_from)
+    kind_to,   val_to   = _parse_iso_param(date_to)
 
-    if date_to:
-        try:
-            qs = qs.filter(
-                physical_time__lte=datetime.fromisoformat(date_to)
-            )
-        except ValueError:
-            pass
+    if kind_from == 'date':
+        qs = qs.filter(physical_time__date__gte=val_from)
+    elif kind_from == 'datetime':
+        qs = qs.filter(physical_time__gte=val_from)
+
+    if kind_to == 'date':
+        qs = qs.filter(physical_time__date__lte=val_to)
+    elif kind_to == 'datetime':
+        qs = qs.filter(physical_time__lte=val_to)
+
+    logger.warning("[PHYSIO_DATA] Registros tras aplicar filtros: %d", qs.count())
 
     # -----------------------------------------------------
     # FILTRAR POR ESTADO DEL PARTICIPANTE
@@ -871,43 +904,69 @@ def api_physiological_data(request):
             assignment__participant__participant_code__in=valid_participants
         )
 
-    # ======================
-    # LECTURA DE DATOS 
-    # ======================
+    # =====================================================
+    # PARÁMETROS DE PAGINACIÓN
+    # =====================================================
+    try:
+        page = int(request.GET.get('page', 1))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        page_size = int(request.GET.get('page_size', 50))
+    except (ValueError, TypeError):
+        page_size = 50
 
-    # Obtenemos los registros 
-    recent_qs = qs.order_by('-physical_time')[:5000]
-    records = list(recent_qs)
-    
-    # Ordenamos cronológicamente para la respuesta
-    records.sort(key=lambda x: x.physical_time)
+    # Límites de seguridad
+    page = max(page, 1)
+    page_size = min(max(page_size, 10), 200)  # entre 10 y 200
 
+    # =====================================================
+    # CONTEO TOTAL (para saber cuántas páginas hay)
+    # =====================================================
+    total_count = qs.count()
+
+    # =====================================================
+    # SLICE PAGINADO
+    # =====================================================
+    offset = (page - 1) * page_size
+    page_qs = qs.order_by('-physical_time')[offset:offset + page_size]
+    records = list(page_qs)
+
+    # =====================================================
+    # VARIABLES DISPONIBLES EN EL FILTRO ACTUAL
+    # =====================================================
+    # Útil para el frontend: mostrar qué variables hay
+    variables_available = list(
+        qs.values_list('variable_type', flat=True).distinct()
+    )
+
+    # =====================================================
+    # SERIALIZACIÓN
+    # =====================================================
     items = []
-
     for item in records:
-        participant = item.assignment.participant.participant_code
-        fitbit = item.assignment.fitbit.fitbit_code
-        variable = item.variable_type
-        value = item.metric_value
-        display_value = value
-
         items.append({
-            'participant_code': participant,
-            'fitbit_code': fitbit,
-            'variable_type': variable,
+            'participant_code': item.assignment.participant.participant_code,
+            'fitbit_code': item.assignment.fitbit.fitbit_code,
+            'variable_type': item.variable_type,
             'physical_time': item.physical_time.isoformat(),
-            'metric_value': display_value,
+            'metric_value': item.metric_value,
         })
 
-    items.reverse()
+    total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
 
     return _json_response(
         request,
         {
-            'count': len(items),
-            'items': items
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+            'variables_available': variables_available,
+            'items': items,
         }
     )
+
 
 
 @csrf_exempt
@@ -1126,6 +1185,32 @@ def api_resolve_alert(request, alert_id):
         )
 
 
+# =========================================================
+# Tamaño de bloque para downsampling de HEART_RATE
+# =========================================================
+def _pick_hr_block(date_from, date_to):
+    """
+    Devuelve el tamaño del bloque (en minutos) para agrupar HEART_RATE
+    según el rango temporal solicitado.
+    """
+    if not (date_from and date_to):
+        return 60        # sin fechas → 1 hora
+    try:
+        d1 = datetime.fromisoformat(date_from).date()
+        d2 = datetime.fromisoformat(date_to).date()
+    except ValueError:
+        return 60
+
+    dias = max((d2 - d1).days, 1)
+    if dias <= 1:
+        return 1         # 1 día → minuto
+    if dias <= 7:
+        return 5         # 1 semana → 5 min
+    if dias <= 30:
+        return 15        # 1 mes → 15 min
+    return 60            # más → 1 hora
+
+
 @csrf_exempt
 def api_export_physiological_data(request):
     if request.method == 'OPTIONS':
@@ -1167,6 +1252,8 @@ def api_export_physiological_data(request):
             )
         )
 
+        hr_block = _pick_hr_block(date_from, date_to)
+
         # -----------------------------------------------------
         # FILTRO PARTICIPANTE
         # -----------------------------------------------------
@@ -1207,34 +1294,26 @@ def api_export_physiological_data(request):
             )
 
         # -----------------------------------------------------
-        # FILTRO FECHA DESDE
+        # FILTRO FECHA 
         # -----------------------------------------------------
 
-        if date_from:
-            try:
-                date_from_obj = datetime.fromisoformat(date_from)
+        kind_from, val_from = _parse_iso_param(date_from)
+        kind_to,   val_to   = _parse_iso_param(date_to)
 
-                qs = qs.filter(
-                    physical_time__date__gte=date_from_obj.date()
-                )
+        if kind_from == 'date':
+            qs = qs.filter(physical_time__date__gte=val_from)
+        elif kind_from == 'datetime':
+            qs = qs.filter(physical_time__gte=val_from)
 
-            except ValueError:
-                pass
+        if kind_to == 'date':
+            qs = qs.filter(physical_time__date__lte=val_to)
+        elif kind_to == 'datetime':
+            qs = qs.filter(physical_time__lte=val_to)
 
-        # -----------------------------------------------------
-        # FILTRO FECHA HASTA
-        # -----------------------------------------------------
-
-        if date_to:
-            try:
-                date_to_obj = datetime.fromisoformat(date_to)
-
-                qs = qs.filter(
-                    physical_time__date__lte=date_to_obj.date()
-                )
-
-            except ValueError:
-                pass
+        logger.info(
+            "[EXPORT] Filtro aplicado → from=(%s, %s) to=(%s, %s), registros=%d",
+            kind_from, val_from, kind_to, val_to, qs.count(),
+        )
 
         # -----------------------------------------------------
         # FILTRO POR ESTADO DEL PARTICIPANTE
@@ -1286,7 +1365,7 @@ def api_export_physiological_data(request):
         pivot_data = {}
         variables_found = set()
 
-        for item in qs.order_by('-physical_time')[:5000]:
+        for item in qs.order_by('-physical_time').iterator(chunk_size=2000):
 
             if not item.assignment:
                 continue
@@ -1306,6 +1385,9 @@ def api_export_physiological_data(request):
 
             local_time = item.physical_time.astimezone(local_tz)
             time_key = local_time.replace(microsecond=0)
+            if item.variable_type == 'HEART_RATE' and hr_block > 1:
+                bucket_min = (time_key.minute // hr_block) * hr_block
+                time_key = time_key.replace(minute=bucket_min)
 
             # -------------------------------------------------
             # CLAVE DE LA FILA
@@ -1623,6 +1705,16 @@ def api_export(request):
 
     export_type = request.GET.get('type')
     export_format = request.GET.get('format', 'csv')
+
+    logger.warning(
+        "[EXPORT] type=%r format=%r from=%r to=%r participant=%r variable=%r",
+        request.GET.get('type'),
+        request.GET.get('format'),
+        request.GET.get('from'),
+        request.GET.get('to'),
+        request.GET.get('participant'),
+        request.GET.get('variable_type'),
+    )
     check_only = request.GET.get('check', 'false') == 'true'
 
     rows = []
@@ -2342,7 +2434,7 @@ def api_researcher_request_code(request):
     try:
         user = User.objects.get(username=email, is_superuser=False)
     except User.DoesNotExist:
-        return _validation_error(request, 'Email no autorizado', status=404)
+        return _validation_error(request, 'email_not_authorized', status=404)
 
     # Generar código OTP temporal de un solo uso
     code = f"{random.randint(100000, 999999)}"
@@ -2517,7 +2609,7 @@ def api_researcher_verify_code(request):
         if not user.is_active:
             return _validation_error(request, 'La cuenta aún no ha sido verificada con el código inicial', status=403)
     except User.DoesNotExist:
-        return _validation_error(request, 'Email no autorizado', status=404)
+        return _validation_error(request, 'email_not_authorized', status=404)
 
     # Invalidar el código usado para que no se pueda reutilizar
     cache.delete(f"otp_{email}")

@@ -12,18 +12,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
+from celery.schedules import crontab
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config("SECRET_KEY")
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG =config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS_STRING = config('ALLOWED_HOSTS', default='')
@@ -134,9 +128,10 @@ CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULE = {
     'sincronizar-datos-cada-5min': {
         'task': 'google_health.tasks.sync_all_users_data',
-        'schedule': 300.0, # 300 segundos = 5 minutos (actualización de datos fisiologicos)
+        'schedule': 300.0,
     },
 }
+
 # Protecciones de Celery
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True

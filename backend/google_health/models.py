@@ -5,6 +5,12 @@ from django.utils import timezone
 from django.db.models.signals import post_save, post_delete, pre_delete, pre_save
 from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.models import User
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.utils.html import escape
+from django.db.models import Q
+from datetime import timedelta
 
 
 # ==========================================
@@ -81,42 +87,52 @@ class AlertType(models.TextChoices):
 ALERT_CATALOG = {
     AlertType.SYNC_ERROR: {
         'message': 'No ha sido posible sincronizar los datos del participante. Revise la conexión e inténtelo de nuevo.',
+        'email_message': 'Por favor, revise la conexión a internet de tu móvil o reinícielo.',
         'priority': AlertPriority.HIGH,
     },
     AlertType.NO_DATA_24H: {
         'message': 'No se han recibido datos del participante en las últimas 24 horas. Compruebe que la pulsera está siendo utilizada y sincronizada correctamente.',
+        'email_message': 'Por favor, compruebe que tiene bien puesta y ajustada la pulsera (y sincronícela desde la app Google Health).',
         'priority': AlertPriority.HIGH,
     },
     AlertType.DEVICE_OFF: {
         'message': 'La pulsera parece estar apagada o sin actividad. Solicite al participante que la encienda y sincronice con la aplicación Fitbit.',
+        'email_message': 'Por favor, compruebe que la pulsera esté cargada y con batería suficiente.',
         'priority': AlertPriority.HIGH,
     },
     AlertType.LOW_BATTERY: {
         'message': 'La batería de la pulsera es inferior al 20%. Se recomienda recargar el dispositivo para evitar pérdidas de datos.',
+        'email_message': 'Por favor, recargue su pulsera.',
         'priority': AlertPriority.MEDIUM,
     },
     AlertType.TOKEN_EXPIRED: {
         'message': 'No se puede acceder a los datos del participante. Es necesario volver a autorizar la conexión con Google Health.',
+        'email_message': 'Por favor, póngase en contacto con los investigadores, es necesario volver a conectar su pulsera.',
         'priority': AlertPriority.HIGH,
     },
     AlertType.DEVICE_UNLINKED: {
         'message': 'La pulsera ya no está vinculada a la cuenta del participante. Compruebe la configuración de Fitbit y Google Health.',
+        'email_message': 'Por favor, póngase en contacto con los investigadores, es necesario volver a conectar su pulsera.',
         'priority': AlertPriority.HIGH,
     },
     AlertType.NO_RECORDS: {
         'message': 'No existen datos registrados para este participante. Compruebe que el proceso de vinculación se ha completado correctamente.',
+        'email_message': 'Por favor, póngase en contacto con los investigadores, es necesario volver a conectar su pulsera.',
         'priority': AlertPriority.HIGH,
     },
     AlertType.HRV_UNAVAILABLE: {
         'message': 'No se ha podido obtener la variabilidad de la frecuencia cardíaca (HRV) para este día. Esto puede deberse a un tiempo de uso insuficiente durante el sueño o a una calidad de señal inadecuada.',
+        'email_message': 'Por favor, recuerde no quitarse la pulsera para dormir, es importante el registro del sueño.',
         'priority': AlertPriority.MEDIUM,
     },
     AlertType.INSUFFICIENT_SLEEP: {
         'message': 'Se ha registrado un tiempo de sueño insuficiente para obtener todas las métricas fisiológicas.',
+        'email_message': 'Por favor, recuerde no quitarse la pulsera para dormir, es importante el registro del sueño.',
         'priority': AlertPriority.MEDIUM,
     },
     AlertType.INSUFFICIENT_USAGE: {
         'message': 'La pulsera ha sido utilizada menos de 18 horas durante el día. Algunas variables fisiológicas pueden estar incompletas.',
+        'email_message': 'Por favor, recuerde no quitarse la pulsera a lo largo del día.',
         'priority': AlertPriority.MEDIUM,
     },
 }
@@ -352,6 +368,22 @@ class PhysiologicalData(models.Model):
     def __str__(self):
         return f"{self.variable_type}: {self.metric_value} at {self.physical_time}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['physical_time'],
+                name='idx_physio_time',
+            ),
+            models.Index(
+                fields=['variable_type', 'physical_time'],
+                name='idx_physio_var_time',
+            ),
+            models.Index(
+                fields=['assignment', 'variable_type', 'physical_time'],
+                name='idx_physio_assign_var_time',
+            ),
+        ]
+
 
 class Alert(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -402,51 +434,58 @@ def activate_alert(
     details=None,
 ):
     """
-    Crea una alerta si no existe.
-
-    Si ya existe una alerta activa del mismo tipo para el mismo
-    participante/asignación, la actualiza con la información más reciente.
+    Crea o actualiza una alerta.
+    Regla anti-spam: no se crea más de UNA alerta por
+    (tipo + participante/asignación + cuenta) al día.
     """
-
     if not assignment and not google_account:
         return None
 
-    filters = {
-        'alert_type': alert_type,
-        'resolved': False,
-    }
-
+    base_filters = {'alert_type': alert_type}
     if assignment:
-        filters['assignment'] = assignment
-
+        base_filters['assignment'] = assignment
     if google_account:
-        filters['google_account'] = google_account
+        base_filters['google_account'] = google_account
 
     catalog_entry = ALERT_CATALOG[alert_type]
-
     default_message = catalog_entry['message']
     priority = catalog_entry['priority']
 
-    alert = Alert.objects.filter(**filters).first()
-
-    if alert:
-        # La alerta ya existe: actualizamos su estado dinámico
-        alert.message = message or default_message
-        alert.details = details or {}
-        alert.last_detected_at = timezone.now()
-
-        alert.save(
+    # ------------------------------------------------------------------
+    # Si existe una alerta ACTIVA del mismo tipo, actualizamos su
+    # estado, sin reenviar correo.
+    # ------------------------------------------------------------------
+    active_alert = Alert.objects.filter(**base_filters, resolved=False).first()
+    if active_alert:
+        active_alert.message = message or default_message
+        active_alert.details = details or {}
+        active_alert.last_detected_at = timezone.now()
+        active_alert.save(
             update_fields=[
                 'message',
                 'details',
                 'last_detected_at',
             ]
         )
+        return active_alert
 
-        return alert
+    # ------------------------------------------------------------------
+    # Si se ha creado o resulto una alerta del mismo tipo hoy, 
+    # no volvemos a crearla hasta el día siguiente.
+    # ------------------------------------------------------------------
+    today_local = timezone.localdate()
+    already_today = Alert.objects.filter(**base_filters).filter(
+        Q(first_detected_at__date=today_local) |
+        Q(resolved_at__date=today_local)
+    ).exists()
 
-    # Si no existe, creamos una nueva
-    return Alert.objects.create(
+    if already_today:
+        return None   # silencio hasta mañana
+
+    # ------------------------------------------------------------------
+    # Crear nueva alerta + enviar correo
+    # ------------------------------------------------------------------
+    new_alert = Alert.objects.create(
         alert_type=alert_type,
         google_account=google_account,
         assignment=assignment,
@@ -457,6 +496,12 @@ def activate_alert(
         last_detected_at=timezone.now(),
         resolved=False,
     )
+
+    # Enviar notificación por email al participante y a los investigadores activos
+    send_alert_notification_emails(new_alert)
+
+    return new_alert
+
 
 def resolve_alert_automatically(
     alert_type,
@@ -482,6 +527,187 @@ def resolve_alert_automatically(
         resolved=True,
         resolved_at=timezone.now()
     )
+
+import logging
+logger = logging.getLogger(__name__)
+
+def send_alert_notification_emails(alert):
+    """
+    Envía un correo de alerta a:
+      1. El participante afectado (si tiene un email de GoogleAccount vinculado)
+         → recibe el mensaje 'email_message' (lenguaje cercano, orientado a acción).
+      2. Todos los investigadores activos (is_active=True, is_superuser=False)
+         → reciben el mensaje técnico + el 'email_message' como contexto.
+    """
+    print(f"[ALERT_EMAIL] Invocado para alerta {alert.id} ({alert.alert_type})")
+
+    catalog_entry = ALERT_CATALOG.get(alert.alert_type, {})
+    email_message = catalog_entry.get('email_message', alert.message)
+
+    # ---------- Contexto ----------
+    participant_code = "N/A"
+    fitbit_code = "N/A"
+    participant_email = None
+
+    if alert.assignment:
+        if alert.assignment.participant:
+            participant_code = alert.assignment.participant.participant_code
+        if alert.assignment.fitbit:
+            fitbit_code = alert.assignment.fitbit.fitbit_code
+
+    if alert.google_account and alert.google_account.email:
+        participant_email = alert.google_account.email
+    elif alert.assignment and alert.assignment.participant:
+        gacc = GoogleAccount.objects.filter(participant=alert.assignment.participant).first()
+        if gacc:
+            participant_email = gacc.email
+
+    # Destinatarios 
+    researcher_emails = list(
+        User.objects.filter(is_active=True, is_superuser=False)
+        .exclude(email='')
+        .values_list('email', flat=True)
+    )
+
+    from_email = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
+
+    # ==========================================================
+    # 1) CORREO AL PARTICIPANTE
+    # ==========================================================
+    if participant_email:
+        subject_p = f"[SENDA] Acción requerida: {alert.get_alert_type_display()}"
+
+        text_participant = (
+            f"Hola,\n\n"
+            f"Se ha detectado una incidencia en tu pulsera:\n\n"
+            f"{email_message}\n\n"
+            f"Atentamente,\nEquipo SENDA · Universidad de Sevilla"
+        )
+
+        html_participant = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9; margin: 0; padding: 20px; }}
+                .container {{ max-width: 600px; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; margin: 0 auto; }}
+                .header {{ background: #1d5a3d; color: #ffffff; padding: 24px; text-align: center; font-size: 18px; font-weight: bold; }}
+                .content {{ padding: 30px; color: #334155; font-size: 15px; line-height: 1.7; }}
+                .action {{ background: #ecfdf5; border-left: 4px solid #10b981; padding: 16px 20px; border-radius: 8px; font-size: 16px; color: #065f46; font-weight: 600; margin: 20px 0; }}
+                .footer {{ background: #f8fafc; padding: 16px 30px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; text-align: center; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">Plataforma SENDA</div>
+                <div class="content">
+                    <p>Hola,</p>
+                    <p>Se ha detectado una incidencia en tu pulsera:</p>
+                    <div class="action">{email_message}</div>
+                </div>
+                <div class="footer">
+                    Equipo SENDA · Universidad de Sevilla
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        try:
+            msg_p = EmailMultiAlternatives(
+                subject=subject_p,
+                body=text_participant,
+                from_email=from_email,
+                to=[participant_email],
+                reply_to=['admin@sendaproject.es'],
+            )
+            msg_p.attach_alternative(html_participant, "text/html")
+            n = msg_p.send(fail_silently=False)
+            print(f"[ALERT_EMAIL] ✅ Participante ({participant_email}): {n} enviado(s)")
+        except Exception as e:
+            import traceback
+            print(f"[ALERT_EMAIL] ❌ Error enviando al participante {participant_email}: {e}")
+            traceback.print_exc()
+
+    # ==========================================================
+    # 2) CORREO A INVESTIGADORES
+    # ==========================================================
+    if researcher_emails:
+        subject_r = f"[SENDA - Alerta] {alert.get_alert_type_display()} ({alert.priority}) · {participant_code}"
+
+        text_researcher = (
+            f"Se ha generado una nueva alerta en la plataforma SENDA.\n\n"
+            f"Tipo:        {alert.get_alert_type_display()}\n"
+            f"Prioridad:   {alert.priority}\n"
+            f"Participante:{participant_code}\n"
+            f"Dispositivo: {fitbit_code}\n"
+            f"Email part.: {participant_email or 'N/A'}\n\n"
+            f"Mensaje técnico: {alert.message}\n"
+            f"Mensaje enviado al participante: {email_message}\n\n"
+            f"Accede a la plataforma para gestionarla."
+        )
+
+        html_researcher = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9; margin: 0; padding: 20px; }}
+                .container {{ max-width: 600px; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; margin: 0 auto; }}
+                .header {{ background: #1d5a3d; color: #ffffff; padding: 24px; text-align: center; font-size: 18px; font-weight: bold; }}
+                .content {{ padding: 30px; color: #334155; font-size: 14px; line-height: 1.6; }}
+                .badge {{ display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; background: #fee2e2; color: #991b1b; }}
+                .info {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 13px; }}
+                .email-msg {{ background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; font-style: italic; color: #1e40af; margin-top: 12px; }}
+                .footer {{ background: #f8fafc; padding: 16px 30px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; text-align: center; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">Plataforma SENDA - Notificación de Incidencia</div>
+                <div class="content">
+                    <p>Se ha registrado una nueva incidencia que requiere supervisión:</p>
+                    <p><strong>Tipo de Alerta:</strong> {escape(alert.get_alert_type_display())}<br>
+                    <strong>Prioridad:</strong> <span class="badge">{escape(alert.priority)}</span></p>
+
+                    <div class="info">
+                        <strong>Participante:</strong> {participant_code}<br>
+                        <strong>Dispositivo:</strong> {fitbit_code}<br>
+                        <strong>Email participante:</strong> {participant_email or 'N/A'}
+                    </div>
+
+                    <p><strong>Mensaje técnico (plataforma):</strong><br>
+                    {alert.message}</p>
+
+                    <p><strong>Mensaje enviado al participante:</strong></p>
+                    <div class="email-msg">{email_message}</div>
+                </div>
+                <div class="footer">
+                    Plataforma SENDA · Universidad de Sevilla
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        try:
+            msg_r = EmailMultiAlternatives(
+                subject=subject_r,
+                body=text_researcher,
+                from_email=from_email,
+                to=researcher_emails,
+                reply_to=['admin@sendaproject.es'],
+            )
+            msg_r.attach_alternative(html_researcher, "text/html")
+            n = msg_r.send(fail_silently=False)
+            print(f"[ALERT_EMAIL] ✅ Investigadores ({len(researcher_emails)}): {n} enviado(s)")
+        except Exception as e:
+            import traceback
+            print(f"[ALERT_EMAIL] ❌ Error enviando a investigadores: {e}")
+            traceback.print_exc()
+
 
 # ==========================================
 # SEÑALES PARA ACTUALIZAR FITBIT

@@ -287,15 +287,19 @@ const FrontPage: React.FC<FrontPageProps> = ({ onGoToLogin }) => {
               </p>
             </div>
 
-            <div className="relative w-full overflow-hidden rounded-[32px] border border-[#DCE7DF] bg-[#0B2116] shadow-[0_20px_45px_rgba(29,90,61,0.08)] dark:border-[#263D31]">
+            <div className="relative w-full overflow-hidden rounded-[24px] md:rounded-[32px] border border-[#DCE7DF] bg-[#0B2116] shadow-[0_20px_45px_rgba(29,90,61,0.08)] dark:border-[#263D31]">
               <img
                 src="/images/research-lab.jpg"
                 alt={t('Research Image Alt')}
-                className="mx-auto h-auto max-h-[500px] w-full object-contain transition-transform duration-700 hover:scale-[1.01]"
+                className="mx-auto w-full h-[220px] md:h-auto md:max-h-[500px] object-cover transition-transform duration-700 hover:scale-[1.01]"
               />
-              <div className="absolute bottom-4 right-7 rounded-2xl border border-white/15 bg-[#0B2116]/80 px-5 py-3 backdrop-blur-md">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A9D9BA]">{t('Research')}</p>
-                <p className="mt-1 text-sm font-medium text-white">{t('Pre Wearable Phase')}</p>
+              <div className="absolute bottom-3 right-3 md:bottom-4 md:right-7 rounded-xl md:rounded-2xl border border-white/15 bg-[#0B2116]/80 px-3 py-2 md:px-5 md:py-3 backdrop-blur-md">
+                <p className="text-[9px] md:text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A9D9BA]">
+                  {t('Research')}
+                </p>
+                <p className="mt-0.5 md:mt-1 text-xs md:text-sm font-medium text-white">
+                  {t('Pre Wearable Phase')}
+                </p>
               </div>
             </div>
           </div>

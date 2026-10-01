@@ -158,6 +158,7 @@ const App: React.FC = () => {
 
     if (userRole === 'researcher') {
       return [
+        { key: 'participants', label: t('Participants'), icon: icons.participants },
         { key: 'fitbits', label: t('Fitbit'), icon: icons.fitbit },
         { key: 'assignments', label: t('Assignments'), icon: icons.assignments },
         { key: 'physiological', label: t('Physiological Data'), icon: icons.physiological },
