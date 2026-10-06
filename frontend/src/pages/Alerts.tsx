@@ -30,6 +30,7 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [query, setQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
+  const [selectedDate, setSelectedDate] = useState<string>(''); // Nuevo estado para el filtro de fecha
   const [showResolved, setShowResolved] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +44,16 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
   const fetchAlerts = () => {
     fetch(`${API_URL}/api/alerts/`, { credentials: 'include' })
       .then((res) => res.json())
-      .then((data) => setAlerts(data.items || []))
+      .then((data) => {
+        const items = data.items || [];
+        // Ordenar por fecha descendente (la más reciente arriba)
+        items.sort((a: AlertItem, b: AlertItem) => {
+          const dateA = new Date(a.first_detected_at || a.created_at).getTime();
+          const dateB = new Date(b.first_detected_at || b.created_at).getTime();
+          return dateB - dateA;
+        });
+        setAlerts(items);
+      })
       .catch(() => setError(t('Error loading alerts')));
   };
 
@@ -92,7 +102,14 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
     const matchesPriority =
       selectedPriority === 'ALL' || alert.priority === selectedPriority;
 
-    return matchesQuery && matchesPriority;
+    // Filtro por fecha (compara el día YYYY-MM-DD)
+    let matchesDate = true;
+    if (selectedDate && alert.first_detected_at) {
+      const alertDateStr = alert.first_detected_at.split('T')[0];
+      matchesDate = alertDateStr === selectedDate;
+    }
+
+    return matchesQuery && matchesPriority && matchesDate;
   });
 
   const countHigh = activeAlerts.filter((item) => item.priority === 'HIGH').length;
@@ -223,8 +240,9 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
           </div>
         </div>
 
+        {/* BARRA DE BÚSQUEDA Y FILTRO DE FECHA */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full">
+          <div className="relative w-full sm:w-1/2">
             <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -239,14 +257,36 @@ const Alerts: React.FC<AlertsProps> = ({ onActiveCountChange }) => {
             />
           </div>
 
-          <div className="flex items-center gap-1.5 bg-senda-light dark:bg-senda-input px-3 h-[37px] rounded-2xl text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] border border-senda-border dark:border-senda-darkborder shrink-0 self-start sm:self-auto">
-            <CustomSelect
-              value={pageSize}
-              onChange={(val) => setPageSize(Number(val))}
-              options={pageSizeOptions}
-              width="w-28"
-            />
-            <span>{t('Per Page')}</span>
+          <div className="flex flex-row items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Input de Filtro por Fecha */}
+            <div className="flex items-center gap-2 bg-senda-light dark:bg-senda-input px-3 h-[37px] rounded-2xl text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] border border-senda-border dark:border-senda-darkborder shrink-0 min-w-[135px]">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => { setSelectedDate(e.target.value); setCurrentPage(1); }}
+                className="bg-transparent text-xs text-senda-main dark:text-white outline-none cursor-pointer w-full appearance-none"
+              />
+              {selectedDate && (
+                <button
+                  onClick={() => { setSelectedDate(''); setCurrentPage(1); }}
+                  className="text-slate-400 hover:text-red-500 font-bold ml-1"
+                  title="Limpiar fecha"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Selector de Paginación */}
+            <div className="flex items-center gap-1.5 bg-senda-light dark:bg-senda-input px-3 h-[37px] rounded-2xl text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] border border-senda-border dark:border-senda-darkborder shrink-0 whitespace-nowrap">
+              <CustomSelect
+                value={pageSize}
+                onChange={(val) => setPageSize(Number(val))}
+                options={pageSizeOptions}
+                width="w-28"
+              />
+              <span>{t('Per Page')}</span>
+            </div>
           </div>
         </div>
 

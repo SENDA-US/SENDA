@@ -1,146 +1,32 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db import models
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
+
 from google_health.services import GoogleAuthService
-from google_health.models import Alert, GoogleAccount, Assignment, PhysiologicalData, SyncLog, VariableType, AlertType, trigger_alert
+from google_health.models import (
+    Alert, GoogleAccount, Assignment, PhysiologicalData,
+    SyncLog, VariableType, AlertType, trigger_alert
+)
 
 API_BASE = "https://health.googleapis.com/v4/users/me/dataTypes"
 
-
-def parse_time(value, fallback):
-    try:
-        return datetime.fromisoformat(value.replace('Z', '+00:00')) if value else fallback
-    except Exception:
-        return fallback
+DAILY_AGGREGATE_VARIABLES = [VariableType.STEPS, VariableType.DISTANCE]
 
 
-def extract_sleep(point, now):
-    """Un único dataPoint 'sleep' trae múltiples variables en su 'summary' y 'stagesSummary'."""
-    interval = point.get('interval', {})
-    summary = point.get('summary', {})
-    start_time = parse_time(interval.get('startTime'), now)
-    end_time = parse_time(interval.get('endTime'), now)
-    results = []
-
-    if 'minutesInSleepPeriod' in summary:
-        results.append((VariableType.SLEEP_DURATION, start_time, float(summary['minutesInSleepPeriod']), start_time, end_time))
-
-    if 'minutesAwake' in summary:
-        results.append((VariableType.SLEEP_AWAKE, start_time, float(summary['minutesAwake']), start_time, end_time))
-
-    stage_map = {
-        'LIGHT': VariableType.SLEEP_LIGHT,
-        'DEEP': VariableType.SLEEP_DEEP,
-        'REM': VariableType.SLEEP_REM,
-    }
-    for stage in summary.get('stagesSummary', []):
-        stage_type = stage.get('type')
-        if stage_type in stage_map:
-            minutes_val = float(stage.get('minutes', 0))
-            results.append((stage_map[stage_type], start_time, minutes_val, start_time, end_time))
-
-    duration_minutes = (end_time - start_time).total_seconds() / 60 if start_time and end_time else 0
-    results.append((VariableType.SLEEP_START_END, start_time, duration_minutes, start_time, end_time))
-
-    return results
-
-
-def extract_heart_rate(point, now):
-    sample_time_str = point.get('sampleTime', {}).get('physicalTime')
-    physical_time = parse_time(sample_time_str, now)    
-    value = float(point.get('beatsPerMinute', 0))    
-    return [(VariableType.HEART_RATE, physical_time, value, physical_time, physical_time)]
-
-
-def extract_daily_resting_heart_rate(point, now):
-    date_info = point.get('date', {})
-    year = date_info.get('year', now.year)
-    month = date_info.get('month', now.month)
-    day = date_info.get('day', now.day)
-    day_dt = datetime(year, month, day, tzinfo=now.tzinfo)
-    value = float(point.get('beatsPerMinute', 0))
-    return [(VariableType.HEART_RATE_RESTING, day_dt, value, None, None)]
-
-
-def extract_daily_hrv(point, now):
-    sample_time_str = point.get('sampleTime', {}).get('physicalTime')
-    physical_time = parse_time(sample_time_str, now)
-    value = float(point.get('rootMeanSquareOfSuccessiveDifferencesMilliseconds', 0))
-    return [(VariableType.HRV_NOCTURNAL, physical_time, value, physical_time, physical_time)]
-
-
-def extract_respiratory_rate(point, now):
-    sample_time_str = point.get('sampleTime', {}).get('physicalTime')
-    physical_time = parse_time(sample_time_str, now)
-    stats = point.get('fullSleepStats', point.get('lightSleepStats', {}))
-    value = float(stats.get('breathsPerMinute', 0))
-    return [(VariableType.RESPIRATORY_RATE_NOCTURNAL, physical_time, value, physical_time, physical_time)]
-
-
-def extract_heart_rate_zones(point, now):
-    date_info = point.get('date', {})
-    day = datetime(
-        date_info.get('year', now.year),
-        date_info.get('month', now.month),
-        date_info.get('day', now.day),
-        tzinfo=now.tzinfo
-    )
-    zones = point.get('heartRateZones', [])
-    zone_map = {
-        'LIGHT': VariableType.HR_ZONE_FAT_BURN,      
-        'MODERATE': VariableType.HR_ZONE_CARDIO,     
-        'PEAK': VariableType.HR_ZONE_PEAK,           
-    }
-    
-    results = []
-    for zone in zones:
-        zone_type = zone.get('heartRateZoneType')
-        if zone_type in zone_map:
-            minutes = float(zone.get('minutes', zone.get('durationMinutes', 0)))
-            results.append((zone_map[zone_type], day, minutes, None, None))
-            
-    return results
-
-
-def extract_active_zone_minutes(point, now):
-    interval = point.get('interval', {})
-    start_time = parse_time(interval.get('startTime'), now)
-    end_time = parse_time(interval.get('endTime'), now)
-    value = float(point.get('activeZoneMinutes', 0))
-    return [(VariableType.ACTIVE_ZONE_MINUTES, start_time, value, start_time, end_time)]
-
-
-def extract_steps(point, now):
-    interval = point.get('interval', {})
-    start_time = parse_time(interval.get('startTime'), now)
-    end_time = parse_time(interval.get('endTime'), now)    
-    value = float(point.get('count', 0))
-    return [(VariableType.STEPS, start_time, value, start_time, end_time)]
-
-
-def extract_distance(point, now):
-    interval = point.get('interval', {})
-    start_time = parse_time(interval.get('startTime'), now)
-    end_time = parse_time(interval.get('endTime'), now)    
-    millimeters = float(point.get('millimeters', 0))
-    value = millimeters / 1000.0  
-    
-    return [(VariableType.DISTANCE, start_time, value, start_time, end_time)]
-
-
-ENDPOINTS = [
-    {"endpoint_path": "sleep", "data_key": "sleep", "extractor": extract_sleep},
-    {"endpoint_path": "steps", "data_key": "steps", "extractor": extract_steps},
-    {"endpoint_path": "distance", "data_key": "distance", "extractor": extract_distance},
-    {"endpoint_path": "heart-rate", "data_key": "heartRate", "extractor": extract_heart_rate},
-    {"endpoint_path": "daily-resting-heart-rate", "data_key": "dailyRestingHeartRate", "extractor": extract_daily_resting_heart_rate},
-    {"endpoint_path": "daily-heart-rate-variability", "data_key": "dailyHeartRateVariability", "extractor": extract_daily_hrv},
-    {"endpoint_path": "respiratory-rate-sleep-summary", "data_key": "respiratoryRateSleepSummary", "extractor": extract_respiratory_rate},
-    {"endpoint_path": "daily-heart-rate-zones", "data_key": "dailyHeartRateZones", "extractor": extract_heart_rate_zones},
-    {"endpoint_path": "active-zone-minutes", "data_key": "activeZoneMinutes", "extractor": extract_active_zone_minutes},
-]
+from google_health.tasks import (
+    extract_sleep,
+    extract_heart_rate,
+    extract_daily_resting_heart_rate,
+    extract_daily_hrv,
+    extract_respiratory_rate,
+    extract_heart_rate_zones,
+    extract_active_zone_minutes,
+    extract_steps,
+    extract_distance,
+    ENDPOINTS,
+)
 
 ALL_VARIABLE_TYPES = [choice[0] for choice in VariableType.choices]
 
@@ -149,11 +35,9 @@ class Command(BaseCommand):
     help = 'Descarga variables fisiológicas de Google Health para una o todas las cuentas activas'
 
     def add_arguments(self, parser):
-        parser.add_argument('--email', type=str, default=None,
-                             help='Correo electrónico específico a sincronizar. Si se omite, todas las cuentas.')
+        parser.add_argument('--email', type=str, default=None)
         parser.add_argument('--variables', type=str, nargs='+', default=None,
-                             choices=ALL_VARIABLE_TYPES,
-                             help='Variables a descargar. Si se omite, se descargan todas.')
+                             choices=ALL_VARIABLE_TYPES)
 
     def handle(self, *args, **options):
         email = options.get('email')
@@ -169,15 +53,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('No hay cuentas de Google registradas.'))
             return
 
-        if requested_variables:
-            target_endpoints = ENDPOINTS
-            variable_filter = set(requested_variables)
-        else:
-            target_endpoints = ENDPOINTS
-            variable_filter = None
-
-        self.stdout.write(f'Endpoints a consultar: {[e["endpoint_path"] for e in target_endpoints]}')
-        self.stdout.write(f'Cuentas a procesar: {accounts.count()}')
+        target_endpoints = ENDPOINTS
+        variable_filter = set(requested_variables) if requested_variables else None
 
         now = timezone.now()
 
@@ -203,42 +80,71 @@ class Command(BaseCommand):
                 ))
                 continue
 
-            has_records = PhysiologicalData.objects.filter(assignment=assignment).exists()
-            if not has_records:
-                trigger_alert(AlertType.NO_RECORDS, google_account=account, assignment=assignment)
-            else:
-                Alert.objects.filter(assignment=assignment, alert_type=AlertType.NO_RECORDS, resolved=False).update(
-                    resolved=True, resolved_at=timezone.now()
-                )
-
-            last_record = PhysiologicalData.objects.filter(assignment=assignment).order_by('-physical_time').first()
-            if last_record:
-                time_diff = now - last_record.physical_time
-                if time_diff.total_seconds() > 86400:
-                    trigger_alert(AlertType.NO_DATA_24H, google_account=account, assignment=assignment)
-                else:
-                    Alert.objects.filter(assignment=assignment, alert_type=AlertType.NO_DATA_24H, resolved=False).update(
-                        resolved=True, resolved_at=timezone.now()
-                    )
+            headers = {"Authorization": f"Bearer {account.access_token}"}
 
             total_downloaded = 0
-            headers = {"Authorization": f"Bearer {account.access_token}"}
+            daily_totals = {}
+            heart_rate_buckets = {}
 
             for endpoint in target_endpoints:
                 url = f"{API_BASE}/{endpoint['endpoint_path']}/dataPoints"
-                response = requests.get(url, headers=headers)
 
-                if response.status_code != 200:
-                    self.stdout.write(self.style.ERROR(
-                        f" -> Error al consultar {endpoint['endpoint_path']}: {response.status_code}"
-                    ))
+                # Paginación + filtro de fecha (últimos 2 días por seguridad)
+                base_params = {}
+                endpoint_path = endpoint['endpoint_path']
+                dos_dias_atras = now - timedelta(days=2)
+                fecha_filtro = dos_dias_atras.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+                if endpoint_path in ['steps', 'distance']:
+                    filter_field = f"{endpoint['data_key']}.interval.civil_start_time"
+                    base_params['filter'] = f'{filter_field} >= "{dos_dias_atras.date().isoformat()}"'
+                elif endpoint_path == 'heart-rate':
+                    # Retrocedemos 2 min para volver a descargar el último minuto completo
+                    since_hr = (since - timedelta(minutes=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+                    base_params['filter'] = f'heart_rate.sample_time.physical_time >= "{since_hr}"'
+
+                all_points = []
+                next_page_token = None
+                page_count = 0
+                endpoint_failed = False
+
+                while True:
+                    page_count += 1
+                    if page_count > 500:
+                        break
+
+                    params = dict(base_params)
+                    if next_page_token:
+                        params['pageToken'] = next_page_token
+
+                    try:
+                        response = requests.get(url, headers=headers, params=params, timeout=30)
+                    except requests.RequestException as e:
+                        self.stdout.write(self.style.ERROR(f" -> {endpoint_path}: {e}"))
+                        endpoint_failed = True
+                        break
+
+                    if response.status_code != 200:
+                        self.stdout.write(self.style.ERROR(
+                            f" -> Error al consultar {endpoint_path}: {response.status_code}"
+                        ))
+                        endpoint_failed = True
+                        break
+
+                    data = response.json()
+                    page_points = data.get('dataPoints', [])
+                    all_points.extend(page_points)
+                    next_page_token = data.get('nextPageToken')
+
+                    if not next_page_token:
+                        break
+
+                if endpoint_failed:
                     continue
 
-                data = response.json()
-                points = data.get('dataPoints', [])
                 endpoint_downloaded = 0
 
-                for point in points:
+                for point in all_points:
                     device_info = point.get('dataSource', {}).get('device', {})
                     device_name = device_info.get('displayName', 'Fitbit Device')
                     platform = point.get('dataSource', {}).get('platform', 'FITBIT')
@@ -250,26 +156,101 @@ class Command(BaseCommand):
                     for variable_type, physical_time, metric_value, start_time, end_time in extracted:
                         if variable_filter and variable_type not in variable_filter:
                             continue
+                        if physical_time is None or metric_value is None:
+                            continue
 
-                        PhysiologicalData.objects.get_or_create(
-                            assignment=assignment,
-                            variable_type=variable_type,
-                            physical_time=physical_time,
-                            defaults={
-                                'metric_value': metric_value,
-                                'start_time': start_time,
-                                'end_time': end_time,
-                                'device_name': device_name,
-                                'platform': platform,
-                                'recording_method': recording_method,
-                            }
-                        )
+                        # HEART_RATE → bucket por minuto
+                        if variable_type == VariableType.HEART_RATE:
+                            minute_dt = physical_time.replace(second=0, microsecond=0)
+                            key = (assignment.id, minute_dt)
+                            if key not in heart_rate_buckets:
+                                heart_rate_buckets[key] = {
+                                    'values': [],
+                                    'device_name': device_name,
+                                    'platform': platform,
+                                    'recording_method': recording_method,
+                                }
+                            heart_rate_buckets[key]['values'].append(float(metric_value))
+                            endpoint_downloaded += 1
+                            continue
+
+                        # STEPS/DISTANCE → agregación diaria
+                        if variable_type in DAILY_AGGREGATE_VARIABLES:
+                            day_date = start_time.date() if start_time else physical_time.date()
+                            key = (variable_type, day_date)
+                            if key not in daily_totals:
+                                daily_totals[key] = {
+                                    'sum': 0.0,
+                                    'earliest_start': start_time or physical_time,
+                                    'latest_end': end_time or physical_time,
+                                    'device_name': device_name,
+                                    'platform': platform,
+                                    'recording_method': recording_method,
+                                }
+                            daily_totals[key]['sum'] += float(metric_value)
+                        else:
+                            PhysiologicalData.objects.update_or_create(
+                                assignment=assignment,
+                                variable_type=variable_type,
+                                physical_time=physical_time,
+                                defaults={
+                                    'metric_value': metric_value,
+                                    'start_time': start_time or physical_time,
+                                    'end_time': end_time or physical_time,
+                                    'device_name': device_name,
+                                    'platform': platform,
+                                    'recording_method': recording_method,
+                                }
+                            )
                         endpoint_downloaded += 1
 
                 total_downloaded += endpoint_downloaded
                 self.stdout.write(self.style.SUCCESS(
-                    f" -> {endpoint['endpoint_path']}: {endpoint_downloaded} registros guardados"
+                    f" -> {endpoint['endpoint_path']}: {endpoint_downloaded} registros"
                 ))
+
+            # Guardar HEART_RATE agregado
+            hr_saved = 0
+            for (assignment_id, minute_dt), info in heart_rate_buckets.items():
+                values = info['values']
+                if not values:
+                    continue
+                avg_value = sum(values) / len(values)
+                PhysiologicalData.objects.update_or_create(
+                    assignment_id=assignment_id,
+                    variable_type=VariableType.HEART_RATE,
+                    physical_time=minute_dt,
+                    defaults={
+                        'metric_value': round(avg_value, 1),
+                        'start_time': minute_dt,
+                        'end_time': minute_dt,
+                        'device_name': info['device_name'],
+                        'platform': info['platform'],
+                        'recording_method': info['recording_method'],
+                    }
+                )
+                hr_saved += 1
+            if hr_saved:
+                self.stdout.write(self.style.SUCCESS(f" -> HEART_RATE: {hr_saved} minutos agregados"))
+
+            # Guardar STEPS/DISTANCE agregados
+            for (variable_type, day_date), info in daily_totals.items():
+                naive_end = datetime.combine(day_date, datetime.max.time().replace(microsecond=0))
+                physical_time_to_save = timezone.make_aware(naive_end, timezone.get_current_timezone())
+                PhysiologicalData.objects.update_or_create(
+                    assignment=assignment,
+                    variable_type=variable_type,
+                    physical_time__date=day_date,
+                    defaults={
+                        'metric_value': info['sum'],
+                        'physical_time': physical_time_to_save,
+                        'start_time': info['earliest_start'],
+                        'end_time': info['latest_end'],
+                        'device_name': info['device_name'],
+                        'platform': info['platform'],
+                        'recording_method': info['recording_method'],
+                    }
+                )
 
             SyncLog.objects.create(
                 google_account=account,

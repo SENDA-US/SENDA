@@ -2,13 +2,21 @@ from celery import shared_task
 from django.utils import timezone
 from django.db import models
 from datetime import datetime, timedelta, timezone as dt_timezone
+from django.core.management import call_command
+
 import requests
 
 from google_health.services import GoogleAuthService
 from google_health.models import (
     Alert, GoogleAccount, Assignment, PhysiologicalData,
-    SyncLog, VariableType, AlertType, AlertPriority, activate_alert, resolve_alert_automatically
+    SyncLog, SyncCursor, VariableType, AlertType, AlertPriority, activate_alert, resolve_alert_automatically
 )
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.mail import EmailMultiAlternatives
+
+User = get_user_model()
 
 API_BASE = "https://health.googleapis.com/v4/users/me/dataTypes"
 
@@ -311,11 +319,6 @@ def evaluate_data_alerts(account, assignment, now, headers):
             assignment=assignment
         )
 
-    resolve_alert_automatically(
-        AlertType.NO_RECORDS,
-        google_account=account,
-        assignment=assignment,
-    )
 
     # =========================================================
     # SIN DATOS DURANTE MÁS DE 24 HORAS
@@ -496,13 +499,12 @@ def evaluate_data_alerts(account, assignment, now, headers):
             )
 
 
-@shared_task
+@shared_task(time_limit=1800, soft_time_limit=1500, max_retries=0)
 def sync_all_users_data():
     accounts = GoogleAccount.objects.filter(authentication_status='ACTIVE')
     now = timezone.now()
 
     for account in accounts:
-
         assignment = Assignment.objects.filter(
             participant=account.participant,
             start_date__lte=now,
@@ -513,239 +515,214 @@ def sync_all_users_data():
             continue
 
         try:
-            # =====================================================
-            # 1. REFRESCAR TOKEN
-            # =====================================================
-
             success = GoogleAuthService.refresh_access_token(account)
-
             if not success:
-                activate_alert(
-                    AlertType.TOKEN_EXPIRED,
-                    google_account=account,
-                    assignment=assignment,
-                )
-
-                # Solo registrar el error TOKEN_ERROR una vez por hora
+                activate_alert(AlertType.TOKEN_EXPIRED, google_account=account, assignment=assignment)
                 last_error = SyncLog.objects.filter(
-                    google_account=account,
-                    result='TOKEN_ERROR'
+                    google_account=account, result='TOKEN_ERROR'
                 ).order_by('-sync_date').first()
-
                 if not last_error or (now - last_error.sync_date) > timedelta(hours=1):
                     SyncLog.objects.create(
-                        google_account=account,
-                        result='TOKEN_ERROR',
-                        downloaded_records=0
+                        google_account=account, result='TOKEN_ERROR', downloaded_records=0
                     )
-
                 continue
 
-            # Si ahora funciona, resolver alerta de token
-            resolve_alert_automatically(
-                AlertType.TOKEN_EXPIRED,
-                google_account=account,
-                assignment=assignment,
-            )
+            resolve_alert_automatically(AlertType.TOKEN_EXPIRED, google_account=account, assignment=assignment)
 
-            headers = {
-                "Authorization": f"Bearer {account.access_token}"
-            }
+            headers = {"Authorization": f"Bearer {account.access_token}"}
 
             total_downloaded = 0
             successful_endpoints = 0
             daily_totals = {}
-
-            # =====================================================
-            # 2. DESCARGAR TODOS LOS ENDPOINTS
-            # =====================================================
+            heart_rate_buckets = {}   
 
             for endpoint in ENDPOINTS:
-                url = (
-                    f"{API_BASE}/"
-                    f"{endpoint['endpoint_path']}/"
-                    f"dataPoints"
+                url = f"{API_BASE}/{endpoint['endpoint_path']}/dataPoints"
+
+                cursor, _ = SyncCursor.objects.get_or_create(
+                    google_account=account,
+                    endpoint=endpoint['endpoint_path'],
                 )
 
-                try:
-                    response = requests.get(
-                        url,
-                        headers=headers,
-                        timeout=30
-                    )
+                all_points = []
+                next_page_token = None
+                endpoint_failed = False
+                token_invalid = False
+                page_count = 0
+                MAX_PAGES = 5000
+                max_seen_time = cursor.last_synced_at
 
-                except requests.RequestException:
+                base_params = {}
+                endpoint_path = endpoint['endpoint_path']
+
+                if cursor.last_synced_at:
+                    since = cursor.last_synced_at
+                else:
+                    since = now - timedelta(days=90)
+
+                fecha_filtro = since.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+                if endpoint_path in ['steps', 'distance']:
+                    sync_start_date = timezone.localtime(now).date() - timedelta(days=2)
+                    filter_field = f"{endpoint['data_key']}.interval.civil_start_time"
+                    base_params['filter'] = f'{filter_field} >= "{sync_start_date.isoformat()}"'
+                elif endpoint_path == 'heart-rate':
+                    # Retrocedemos 2 min para volver a descargar el último minuto completo
+                    since_hr = (since - timedelta(minutes=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+                    base_params['filter'] = f'heart_rate.sample_time.physical_time >= "{since_hr}"'
+                elif endpoint_path == 'active-zone-minutes':
+                    base_params['filter'] = f'active_zone_minutes.interval.start_time >= "{fecha_filtro}"'
+                elif endpoint_path == 'daily-heart-rate-zones':
+                    hace_90_dias = (timezone.localtime(now) - timedelta(days=90)).date()
+                    base_params['filter'] = f'daily_heart_rate_zones.date >= "{hace_90_dias.isoformat()}"'
+
+                while True:
+                    page_count += 1
+                    if page_count > MAX_PAGES:
+                        print(f"[WARN] {endpoint_path}: {MAX_PAGES} páginas alcanzadas")
+                        break
+
+                    params = dict(base_params)
+                    if next_page_token:
+                        params['pageToken'] = next_page_token
+
+                    try:
+                        response = requests.get(url, headers=headers, params=params, timeout=30)
+                    except requests.RequestException as e:
+                        print(f"[ERROR] {endpoint_path}: requests falló: {e}")
+                        endpoint_failed = True
+                        break
+
+                    if response.status_code in [401, 403]:
+                        token_invalid = True
+                        break
+
+                    if response.status_code != 200:
+                        print(f"[ERROR] {endpoint_path}: HTTP {response.status_code}")
+                        endpoint_failed = True
+                        break
+
+                    try:
+                        data = response.json()
+                    except ValueError:
+                        print(f"[ERROR] {endpoint_path}: JSON inválido")
+                        endpoint_failed = True
+                        break
+
+                    page_points = data.get('dataPoints', [])
+                    all_points.extend(page_points)
+
+                    for p in page_points:
+                        pt = None
+                        if endpoint_path == 'heart-rate':
+                            pt_str = p.get('heartRate', {}).get('sampleTime', {}).get('physicalTime')
+                        elif endpoint_path in ['steps', 'distance']:
+                            inner = p.get(endpoint['data_key'], {})
+                            interval = inner.get('interval', {})
+                            pt_str = interval.get('endTime') or interval.get('startTime')
+                        else:
+                            pt_str = (
+                                p.get('sampleTime', {}).get('physicalTime')
+                                or p.get('interval', {}).get('endTime')
+                                or p.get('interval', {}).get('startTime')
+                            )
+                        if pt_str:
+                            pt = parse_time(pt_str, None)
+                            if pt and (max_seen_time is None or pt > max_seen_time):
+                                max_seen_time = pt
+
+                    next_page_token = data.get('nextPageToken')
+
+                    if page_count == 1 or page_count % 10 == 0:
+                        print(f"[{endpoint_path}] pág {page_count}, total {len(all_points)}")
+
+                    if not next_page_token:
+                        break
+
+                if token_invalid:
+                    activate_alert(AlertType.TOKEN_EXPIRED, google_account=account, assignment=assignment)
+                    break
+
+                if endpoint_failed:
                     continue
 
-                # ---------------------------------------------
-                # TOKEN INVÁLIDO
-                # ---------------------------------------------
-                if response.status_code in [401, 403]:
-                    activate_alert(
-                        AlertType.TOKEN_EXPIRED,
-                        google_account=account,
-                        assignment=assignment,
-                    )
-                    break  # Rompemos el bucle porque el token no es válido
+                if max_seen_time:
+                    cursor.last_synced_at = max_seen_time
+                cursor.last_sync_started_at = now
+                cursor.last_sync_finished_at = timezone.now()
+                cursor.last_sync_records = len(all_points)
+                cursor.save()
 
-                # ---------------------------------------------
-                # ERROR DEL SERVIDOR / API EN ESTE ENDPOINT
-                # ---------------------------------------------
-                if response.status_code != 200:
-                    continue  # Este endpoint falló, pero permitimos que los demás sigan
-
-                # Si la respuesta es 200 OK, sumamos un éxito
                 successful_endpoints += 1
 
-                try:
-                    data = response.json()
-                except ValueError:
-                    continue
-
-                points = data.get('dataPoints', [])
+                points = all_points
                 endpoint_downloaded = 0
 
-                # =================================================
-                # 3. PROCESAR CADA PUNTO
-                # =================================================
-
                 for point in points:
-                    device_info = (
-                        point.get('dataSource', {})
-                        .get('device', {})
-                    )
+                    device_info = point.get('dataSource', {}).get('device', {})
+                    device_name = device_info.get('displayName') or 'Fitbit Device'
+                    platform = point.get('dataSource', {}).get('platform') or 'FITBIT'
+                    recording_method = point.get('dataSource', {}).get('recordingMethod') or 'UNKNOWN'
 
-                    device_name = (
-                        device_info.get('displayName')
-                        or 'Fitbit Device'
-                    )
+                    payload = point.get(endpoint['data_key'], point)
+                    extracted = endpoint['extractor'](payload, now)
 
-                    platform = (
-                        point.get('dataSource', {})
-                        .get('platform')
-                        or 'FITBIT'
-                    )
-
-                    recording_method = (
-                        point.get('dataSource', {})
-                        .get('recordingMethod')
-                        or 'UNKNOWN'
-                    )
-
-                    payload = point.get(
-                        endpoint['data_key'],
-                        point
-                    )
-
-                    extracted = endpoint['extractor'](
-                        payload,
-                        now
-                    )
-
-                    for (
-                        variable_type,
-                        physical_time,
-                        metric_value,
-                        start_time,
-                        end_time
-                    ) in extracted:
-
+                    for (variable_type, physical_time, metric_value, start_time, end_time) in extracted:
                         if physical_time is None:
                             continue
 
-                        if (
-                            metric_value is None
-                            and variable_type not in [
-                                VariableType.SLEEP_START,
-                                VariableType.SLEEP_END
-                            ]
-                        ):
+                        if (metric_value is None and variable_type not in
+                                [VariableType.SLEEP_START, VariableType.SLEEP_END]):
                             continue
 
-                        # =========================================
-                        # STEPS Y DISTANCE ACUMULADOS POR DÍA
-                        # =========================================
+                        if variable_type == VariableType.HEART_RATE:
+                            minute_dt = physical_time.replace(second=0, microsecond=0)
+                            bucket_key = (assignment.id, minute_dt)
+                            if bucket_key not in heart_rate_buckets:
+                                heart_rate_buckets[bucket_key] = {
+                                    'values': [],
+                                    'device_name': device_name,
+                                    'platform': platform,
+                                    'recording_method': recording_method,
+                                }
+                            heart_rate_buckets[bucket_key]['values'].append(float(metric_value))
+                            endpoint_downloaded += 1
+                            continue
+                        # 
 
                         if variable_type in DAILY_AGGREGATE_VARIABLES:
-
-                            day_date = (
-                                start_time.date()
-                                if start_time
-                                else physical_time.date()
-                            )
-
-                            key = (
-                                variable_type,
-                                day_date
-                            )
+                            day_date = start_time.date() if start_time else physical_time.date()
+                            key = (variable_type, day_date)
 
                             if key not in daily_totals:
-
                                 daily_totals[key] = {
                                     'sum': 0.0,
-                                    'earliest_start': (
-                                        start_time
-                                        or physical_time
-                                    ),
-                                    'latest_end': (
-                                        end_time
-                                        or physical_time
-                                    ),
+                                    'earliest_start': start_time or physical_time,
+                                    'latest_end': end_time or physical_time,
                                     'device_name': device_name,
                                     'platform': platform,
                                     'recording_method': recording_method,
                                 }
 
-                            daily_totals[key]['sum'] += float(
-                                metric_value
-                            )
+                            daily_totals[key]['sum'] += float(metric_value)
 
-                            candidate_start = (
-                                start_time
-                                or physical_time
-                            )
+                            candidate_start = start_time or physical_time
+                            candidate_end = end_time or physical_time
 
-                            candidate_end = (
-                                end_time
-                                or physical_time
-                            )
-
-                            if (
-                                candidate_start
-                                < daily_totals[key]['earliest_start']
-                            ):
-                                daily_totals[key][
-                                    'earliest_start'
-                                ] = candidate_start
-
-                            if (
-                                candidate_end
-                                > daily_totals[key]['latest_end']
-                            ):
-                                daily_totals[key][
-                                    'latest_end'
-                                ] = candidate_end
-
-                        # =========================================
-                        # RESTO DE VARIABLES
-                        # =========================================
+                            if candidate_start < daily_totals[key]['earliest_start']:
+                                daily_totals[key]['earliest_start'] = candidate_start
+                            if candidate_end > daily_totals[key]['latest_end']:
+                                daily_totals[key]['latest_end'] = candidate_end
 
                         else:
-
                             PhysiologicalData.objects.get_or_create(
                                 assignment=assignment,
                                 variable_type=variable_type,
                                 physical_time=physical_time,
                                 defaults={
                                     'metric_value': metric_value,
-                                    'start_time': (
-                                        start_time
-                                        or physical_time
-                                    ),
-                                    'end_time': (
-                                        end_time
-                                        or physical_time
-                                    ),
+                                    'start_time': start_time or physical_time,
+                                    'end_time': end_time or physical_time,
                                     'device_name': device_name,
                                     'platform': platform,
                                     'recording_method': recording_method,
@@ -757,51 +734,85 @@ def sync_all_users_data():
                 total_downloaded += endpoint_downloaded
 
             # =====================================================
+            # 3b. GUARDAR HEART_RATE AGREGADO POR MINUTO 
+            # =====================================================
+            hr_saved = 0
+            for (assignment_id, minute_dt), info in heart_rate_buckets.items():
+                values = info['values']
+                if not values:
+                    continue
+                avg_value = sum(values) / len(values)
+
+                PhysiologicalData.objects.update_or_create(
+                    assignment_id=assignment_id,
+                    variable_type=VariableType.HEART_RATE,
+                    physical_time=minute_dt,
+                    defaults={
+                        'metric_value': round(avg_value, 1),
+                        'start_time': minute_dt,
+                        'end_time': minute_dt,
+                        'device_name': info['device_name'],
+                        'platform': info['platform'],
+                        'recording_method': info['recording_method'],
+                    }
+                )
+                hr_saved += 1
+
+            if hr_saved:
+                print(f"[HEART_RATE] Guardados {hr_saved} minutos agregados (de {sum(len(v['values']) for v in heart_rate_buckets.values())} muestras crudas)")
+
+
+            # =====================================================
             # 4. GUARDAR TOTALES DIARIOS DE STEPS Y DISTANCE
             # =====================================================
 
-            for (
-                variable_type,
-                day_date
-            ), info in daily_totals.items():
+            sync_time = timezone.now()
+            today_local = timezone.localtime(sync_time).date()
 
-                existing = (
-                    PhysiologicalData.objects
-                    .filter(
-                        assignment=assignment,
-                        variable_type=variable_type,
-                        physical_time__date=day_date
-                    )
-                    .order_by('physical_time')
-                    .first()
-                )
+            for (variable_type, day_date), info in daily_totals.items():
+                if (today_local - day_date).days > 2:
+                    continue
+                if day_date < today_local:
+                    # Día pasado: usar 23:59:59 del día local
+                    naive_end = datetime.combine(day_date, datetime.max.time().replace(microsecond=0))
+                    physical_time_to_save = timezone.make_aware(naive_end, timezone.get_current_timezone())
+                else:
+                    # Día actual: usar la hora actual
+                    physical_time_to_save = sync_time
 
-                if existing:
+                # Buscar TODOS los registros del día para esta variable
+                todos = list(PhysiologicalData.objects.filter(
+                    assignment=assignment,
+                    variable_type=variable_type,
+                    physical_time__date=day_date
+                ).order_by('id'))
 
+                if todos:
+                    # Actualiza el primero
+                    existing = todos[0]
                     existing.metric_value = info['sum']
+                    existing.physical_time = physical_time_to_save
                     existing.start_time = info['earliest_start']
                     existing.end_time = info['latest_end']
                     existing.device_name = info['device_name']
                     existing.platform = info['platform']
                     existing.recording_method = info['recording_method']
+                    existing.save(update_fields=[
+                        'metric_value', 'physical_time', 'start_time',
+                        'end_time', 'device_name', 'platform', 'recording_method',
+                    ])
 
-                    existing.save(
-                        update_fields=[
-                            'metric_value',
-                            'start_time',
-                            'end_time',
-                            'device_name',
-                            'platform',
-                            'recording_method',
-                        ]
-                    )
-
+                    # Borrar duplicados
+                    ids_a_borrar = [r.id for r in todos[1:]]
+                    if ids_a_borrar:
+                        print(f"[INFO] Borrando {len(ids_a_borrar)} duplicados de {variable_type} en {day_date}")
+                        PhysiologicalData.objects.filter(id__in=ids_a_borrar).delete()
                 else:
-
+                    # No existe, crear
                     PhysiologicalData.objects.create(
                         assignment=assignment,
                         variable_type=variable_type,
-                        physical_time=info['earliest_start'],
+                        physical_time=physical_time_to_save,
                         metric_value=info['sum'],
                         start_time=info['earliest_start'],
                         end_time=info['latest_end'],
@@ -811,70 +822,176 @@ def sync_all_users_data():
                     )
 
             # =====================================================
-            # 5. RESULTADO DE LA SINCRONIZACIÓN
+            # 5. RESULTADO DE LA SINCRONIZACIÓN (SIN CAMBIOS)
             # =====================================================
             if successful_endpoints == 0 and len(ENDPOINTS) > 0:
-                activate_alert(
-                    AlertType.SYNC_ERROR,
-                    google_account=account,
-                    assignment=assignment,
-                )
-                # Los errores siempre se registran
-                SyncLog.objects.create(
-                    google_account=account,
-                    result='TOTAL_ERROR',
-                    downloaded_records=total_downloaded,
-                )
+                activate_alert(AlertType.SYNC_ERROR, google_account=account, assignment=assignment)
+                SyncLog.objects.create(google_account=account, result='TOTAL_ERROR', downloaded_records=total_downloaded)
             else:
-                resolve_alert_automatically(
-                    AlertType.SYNC_ERROR,
-                    google_account=account,
-                    assignment=assignment,
-                )
-
-                # Solo registrar un SUCCESS al día por participante
+                resolve_alert_automatically(AlertType.SYNC_ERROR, google_account=account, assignment=assignment)
                 now_local = timezone.localtime(now)
                 today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
                 today_start_utc = today_start_local.astimezone(dt_timezone.utc)
-
                 already_logged_today = SyncLog.objects.filter(
-                    google_account=account,
-                    result='SUCCESS',
-                    sync_date__gte=today_start_utc
+                    google_account=account, result='SUCCESS', sync_date__gte=today_start_utc
                 ).exists()
-
                 if successful_endpoints > 0 and not already_logged_today:
                     SyncLog.objects.create(
-                        google_account=account,
-                        result='SUCCESS',
-                        downloaded_records=total_downloaded,
+                        google_account=account, result='SUCCESS', downloaded_records=total_downloaded
                     )
 
             # =====================================================
-            # 6. EVALUAR ALERTAS BASADAS EN DATOS REALES
+            # 6. EVALUAR ALERTAS (SIN CAMBIOS)
             # =====================================================
-            evaluate_data_alerts(
-                account=account,
-                assignment=assignment,
-                now=now,
-                headers=headers,
-            )
+            evaluate_data_alerts(account=account, assignment=assignment, now=now, headers=headers)
 
         except Exception as e:
-            activate_alert(
-                AlertType.SYNC_ERROR,
-                google_account=account,
-                assignment=assignment,
-            )
-            # Solo registrar un error cada hora
+            import traceback
+            print(f"[ERROR] sync_all_users_data falló para {account.email}: {e}")
+            traceback.print_exc()
+            activate_alert(AlertType.SYNC_ERROR, google_account=account, assignment=assignment)
             last_error = SyncLog.objects.filter(
-                google_account=account,
-                result__startswith='ERROR'
+                google_account=account, result__startswith='ERROR'
             ).order_by('-sync_date').first()
-
             if not last_error or (now - last_error.sync_date) > timedelta(hours=1):
                 SyncLog.objects.create(
                     google_account=account,
                     result=f'ERROR: {str(e)[:100]}',
                     downloaded_records=0
                 )
+
+@shared_task(time_limit=300, soft_time_limit=270)
+def close_previous_day_for_account(account_id, date_str):
+    """
+    Cierra STEPS/DISTANCE de un día concreto para UNA cuenta.
+    """
+    from google_health.models import GoogleAccount
+    account = GoogleAccount.objects.filter(id=account_id).first()
+    if not account:
+        return
+    try:
+        call_command(
+            'reprocess_daily_aggregates',
+            '--from', date_str,
+            '--to', date_str,
+            '--email', account.email,
+        )
+        print(f'[CLOSE_DAY] {account.email} cerrado para {date_str}')
+    except Exception as e:
+        print(f'[CLOSE_DAY][ERROR] {account.email}: {e}')
+
+
+@shared_task(time_limit=300, soft_time_limit=270)
+def close_previous_day_aggregates():
+    """
+    Fan-out: lanza una tarea por cada cuenta activa para cerrar el día anterior.
+    """
+    yesterday = (timezone.localtime(timezone.now()).date() - timedelta(days=1)).isoformat()
+    print(f'[CLOSE_DAY] Cerrando el día {yesterday} para todas las cuentas activas')
+
+    account_ids = list(
+        GoogleAccount.objects.filter(authentication_status='ACTIVE')
+        .values_list('id', flat=True)
+    )
+
+    for account_id in account_ids:
+        close_previous_day_for_account.delay(str(account_id), yesterday)
+
+    print(f'[CLOSE_DAY] Lanzadas {len(account_ids)} tareas hijas')
+
+
+import logging
+logger = logging.getLogger(__name__)
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={'max_retries': 3},
+    time_limit=60,
+)
+def send_alert_email_task(self, alert_id):
+    from google_health.models import Alert, GoogleAccount
+
+    try:
+        alert = Alert.objects.select_related(
+            'assignment__participant',
+            'assignment__fitbit',
+            'google_account',
+        ).get(id=alert_id)
+    except Alert.DoesNotExist:
+        logger.warning("[ALERT_EMAIL] Alerta %s ya no existe", alert_id)
+        return
+
+    # -------- Contexto --------
+    participant_code = "N/A"
+    fitbit_code      = "N/A"
+    participant_email = None
+
+    if alert.assignment:
+        if alert.assignment.participant:
+            participant_code = alert.assignment.participant.participant_code
+        if alert.assignment.fitbit:
+            fitbit_code = alert.assignment.fitbit.fitbit_code
+
+    if alert.google_account and alert.google_account.email:
+        participant_email = alert.google_account.email
+    elif alert.assignment and alert.assignment.participant:
+        gacc = GoogleAccount.objects.filter(
+            participant=alert.assignment.participant
+        ).first()
+        if gacc:
+            participant_email = gacc.email
+
+    # -------- Destinatarios --------
+    researcher_emails = list(
+        User.objects.filter(is_active=True, is_superuser=False)
+        .exclude(email='')
+        .values_list('email', flat=True)
+    )
+
+    recipients = list(researcher_emails)
+    if participant_email and participant_email not in recipients:
+        recipients.append(participant_email)
+
+    if not recipients:
+        logger.warning("[ALERT_EMAIL] Alerta %s sin destinatarios", alert_id)
+        return
+
+    subject = f"[SENDA - Alerta] {alert.get_alert_type_display()} ({alert.priority})"
+
+    text_content = (
+        f"Se ha generado una nueva alerta en la plataforma SENDA.\n\n"
+        f"Tipo: {alert.get_alert_type_display()}\n"
+        f"Prioridad: {alert.priority}\n"
+        f"Participante: {participant_code} (Dispositivo: {fitbit_code})\n"
+        f"Mensaje: {alert.message}\n\n"
+        f"Accede a la plataforma para gestionarla."
+    )
+
+    html_content = f"""... (usa la plantilla HTML que ya tienes) ..."""
+
+    # -------- from_email seguro --------
+    default_from = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
+    if '<' in default_from and '>' in default_from:
+        from_email = default_from            # ya tiene formato "Nombre <mail>"
+    else:
+        from_email = f"SENDA Alertas <{default_from}>"
+
+    try:
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=from_email,
+            to=recipients,
+            reply_to=['admin@sendaproject.es'],
+        )
+        msg.attach_alternative(html_content, "text/html")
+        sent = msg.send(fail_silently=False)
+        logger.info(
+            "[ALERT_EMAIL] Alerta %s (%s) enviada a %d destinatarios (participante=%s)",
+            alert_id, alert.alert_type, sent, participant_email,
+        )
+    except Exception as exc:
+        logger.exception("[ALERT_EMAIL] Fallo al enviar alerta %s: %s", alert_id, exc)
+        raise   # deja que Celery reintente

@@ -22,7 +22,7 @@ const VARIABLE_OPTIONS = [
   'HEART_RATE', 'HEART_RATE_RESTING', 'HRV_AVERAGE_MS', 'HRV_RMSSD',
   'HRV_NON_REM_HR', 'HRV_ENTROPY',
   'HR_ZONE_FAT_BURN', 'HR_ZONE_CARDIO', 'HR_ZONE_PEAK',
-  'ACTIVE_ZONE_MINUTES', 'STEPS', 'DISTANCE'
+  'STEPS', 'DISTANCE'
 ];
 
 const CustomMultiSearchableSelect: React.FC<{
@@ -150,34 +150,44 @@ const PhysiologicalData: React.FC = () => {
   const [selectedFitbits, setSelectedFitbits] = useState<string[]>([]);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [from, setFrom] = useState('');
+  const [fromTime, setFromTime] = useState('');
   const [to, setTo] = useState('');
+  const [toTime, setToTime] = useState('');
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
 
   const [data, setData] = useState<PhysiologicalDataItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Paginación en servidor ────────────────────────────────
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [variablesAvailable, setVariablesAvailable] = useState<string[]>([]);
+
   const [pageSize, setPageSize] = useState<number>(() => {
     const savedSize = localStorage.getItem('physiological_page_size');
-    return savedSize ? Number(savedSize) : 10;
+    return savedSize ? Number(savedSize) : 50;
   });
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [sortOrderDate, setSortOrderDate] = useState<'desc' | 'asc'>('desc');
-  const [sortOrderValue, setSortOrderValue] = useState<'desc' | 'asc'>('desc');
 
   const [participantsList, setParticipantsList] = useState<string[]>([]);
   const [fitbitsList, setFitbitsList] = useState<string[]>([]);
   const [participantsStatusMap, setParticipantsStatusMap] = useState<Record<string, string>>({});
 
+  const [countIsCapped, setCountIsCapped] = useState(false);
+
+  const buildDateParam = (date: string, time: string): string => {
+    if (!date) return '';
+    return time ? `${date}T${time}` : date;
+  };
+
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}/api/participants/`, { credentials: 'include' }).then(r => r.json()),
       fetch(`${API_URL}/api/fitbits/list/`, { credentials: 'include' }).then(r => r.json()),
-      fetch(`${API_URL}/api/physiological-data/`, { credentials: 'include' }).then(r => r.json()),
       fetch(`${API_URL}/api/assignments/`, { credentials: 'include' }).then(r => r.json())
     ])
-      .then(([partData, fitData, physData, assignData]) => {
+      .then(([partData, fitData, assignData]) => {
         const itemsPart = partData.items || partData || [];
         setParticipantsList(itemsPart.map((p: any) => p.participant_code));
         setFitbitsList(fitData.items || []);
@@ -208,7 +218,6 @@ const PhysiologicalData: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('physiological_page_size', pageSize.toString());
-    setCurrentPage(1);
   }, [pageSize]);
 
   const loadData = () => {
@@ -217,38 +226,56 @@ const PhysiologicalData: React.FC = () => {
     if (selectedParticipants.length > 0) params.append('participant', selectedParticipants.join(','));
     if (selectedFitbits.length > 0) params.append('fitbit', selectedFitbits.join(','));
     if (selectedVariables.length > 0) params.append('variable_type', selectedVariables.join(','));
-    if (from) params.append('from', from);
-    if (to) params.append('to', to);
+
+    const fromValue = buildDateParam(from, fromTime);
+    const toValue = buildDateParam(to, toTime);
+    if (fromValue) params.append('from', fromValue);
+    if (toValue) params.append('to', toValue);
+
     if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
+
+    // Paginación en servidor
+    params.append('page', String(currentPage));
+    params.append('page_size', String(pageSize));
 
     fetch(`${API_URL}/api/physiological-data/?${params.toString()}`, { credentials: 'include' })
       .then((res) => res.json())
       .then((result) => {
         setData(result.items || []);
-        setCurrentPage(1);
+        setTotalCount(result.count || 0);
+        setTotalPages(result.total_pages || 1);
+        setVariablesAvailable(result.variables_available || []);
+        setCountIsCapped(result.count_is_capped || false);
       })
       .catch(() => setError(t('Error loading physiological data')));
   };
 
+  // Recarga cuando cambian filtros o página
   useEffect(() => {
     loadData();
-  }, [selectedParticipants, selectedFitbits, selectedVariables, from, to, statusFilter]);
+  }, [
+    selectedParticipants,
+    selectedFitbits,
+    selectedVariables,
+    from,
+    fromTime,
+    to,
+    toTime,
+    statusFilter,
+    currentPage,
+    pageSize,
+  ]);
 
-  const filteredDataByStatus = data.filter((item) => {
-    const pStatus = participantsStatusMap[item.participant_code] || 'ACTIVE';
-    if (statusFilter === 'ALL') return true;
-    return pStatus === statusFilter;
-  });
-
-  const totalPages = Math.ceil(filteredDataByStatus.length / pageSize) || 1;
-  const paginatedData = filteredDataByStatus.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Reset de página al cambiar cualquier filtro
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedParticipants, selectedFitbits, selectedVariables, from, fromTime, to, toTime, statusFilter]);
 
   const pageSizeOptions = [
-    { label: 5, value: 5 },
-    { label: 10, value: 10 },
-    { label: 15, value: 15 },
-    { label: 20, value: 20 },
     { label: 25, value: 25 },
+    { label: 50, value: 50 },
+    { label: 100, value: 100 },
+    { label: 200, value: 200 },
   ];
 
   const clearFilters = () => {
@@ -256,10 +283,10 @@ const PhysiologicalData: React.FC = () => {
     setSelectedFitbits([]);
     setSelectedVariables([]);
     setFrom('');
+    setFromTime('');
     setTo('');
+    setToTime('');
     setStatusFilter('ALL');
-    setSortOrderDate('desc');
-    setSortOrderValue('desc');
     setCurrentPage(1);
   };
 
@@ -270,34 +297,24 @@ const PhysiologicalData: React.FC = () => {
     if (selectedParticipants.length > 0) params.append('participant', selectedParticipants.join(','));
     if (selectedFitbits.length > 0) params.append('fitbit', selectedFitbits.join(','));
     if (selectedVariables.length > 0) params.append('variable_type', selectedVariables.join(','));
-    if (from) params.append('from', from);
-    if (to) params.append('to', to);
+
+    const fromValue = buildDateParam(from, fromTime);
+    const toValue = buildDateParam(to, toTime);
+    if (fromValue) params.append('from', fromValue);
+    if (toValue) params.append('to', toValue);
+
     if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
 
     window.open(`${API_URL}/api/export/physiological/data/?${params.toString()}`, '_blank');
   };
 
-  const toggleSortOrderDate = () => {
-    const newOrder = sortOrderDate === 'desc' ? 'asc' : 'desc';
-    setSortOrderDate(newOrder);
-
-    const sortedData = [...data].sort((a, b) => {
-      const dateA = new Date(a.physical_time).getTime();
-      const dateB = new Date(b.physical_time).getTime();
-      return newOrder === 'desc' ? dateB - dateA : dateA - dateB;
-    });
-    setData(sortedData);
-  };
-
-  const toggleSortOrderValue = () => {
-    const newOrder = sortOrderValue === 'desc' ? 'asc' : 'desc';
-    setSortOrderValue(newOrder);
-
-    const sortedData = [...data].sort((a, b) => {
-      return newOrder === 'desc' ? b.metric_value - a.metric_value : a.metric_value - b.metric_value;
-    });
-    setData(sortedData);
-  };
+  const hasActiveFilters =
+    selectedParticipants.length > 0 ||
+    selectedFitbits.length > 0 ||
+    selectedVariables.length > 0 ||
+    !!from ||
+    !!to ||
+    statusFilter !== 'ALL';
 
   return (
     <div className="w-full text-senda-main dark:text-senda-darktext space-y-8">
@@ -391,23 +408,47 @@ const PhysiologicalData: React.FC = () => {
           </div>
 
           <div className="col-span-1">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">{t('From')}</label>
-            <input
-              type="datetime-local"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
-            />
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">
+              {t('From')}
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="flex-1 h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              <input
+                type="time"
+                value={fromTime}
+                onChange={(e) => setFromTime(e.target.value)}
+                placeholder="00:00"
+                title={t('Optional hour')}
+                className="w-[110px] h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
+              />
+            </div>
           </div>
 
           <div className="col-span-1">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">{t('To')}</label>
-            <input
-              type="datetime-local"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
-            />
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B6F66] dark:text-[#9AA093] mb-1.5">
+              {t('To')}
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="flex-1 h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 sm:px-4 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
+              />
+              <input
+                type="time"
+                value={toTime}
+                onChange={(e) => setToTime(e.target.value)}
+                placeholder="23:59"
+                title={t('Optional hour')}
+                className="w-[110px] h-[42px] rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-dark px-2 text-xs text-senda-main dark:text-white outline-none transition focus:border-senda-secondary [color-scheme:light] dark:[color-scheme:dark]"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -418,7 +459,8 @@ const PhysiologicalData: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900">
-              {t('Showing Filtered Records', { count: paginatedData.length, total: filteredDataByStatus.length })}
+              {t('Showing Filtered Records', { count: data.length, total: totalCount })}
+              {countIsCapped && ' (100.000+)'}
             </span>
 
             <div className="flex items-center gap-1.5 bg-senda-light dark:bg-senda-input px-3 h-[37px] rounded-2xl text-xs font-semibold text-[#6B6F66] dark:text-[#9AA093] border border-senda-border dark:border-senda-darkborder">
@@ -442,12 +484,12 @@ const PhysiologicalData: React.FC = () => {
                   <th className="w-[17%] px-6 py-3.5 font-bold">{t('Status')}</th>
                   <th className="w-[18%] px-6 py-3.5 font-bold">{t('Fitbit')}</th>
                   <th className="w-[18%] px-6 py-3.5 font-bold">{t('Variable')}</th>
-                  <th className="w-[15%] px-6 py-3.5 font-bold cursor-pointer select-none hover:text-senda-primary dark:hover:text-senda-accent transition" onClick={toggleSortOrderDate}>
+                  <th className="w-[15%] px-6 py-3.5 font-bold">
                     <div className="flex items-center gap-1.5">
                       <span>{t('Time')}</span>
                     </div>
                   </th>
-                  <th className="w-[14%] px-6 py-3.5 font-bold cursor-pointer select-none hover:text-senda-primary dark:hover:text-senda-accent transition rounded-r-2xl" onClick={toggleSortOrderValue}>
+                  <th className="w-[14%] px-6 py-3.5 font-bold rounded-r-2xl">
                     <div className="flex items-center gap-1.5">
                       <span>{t('Value')}</span>
                     </div>
@@ -455,10 +497,10 @@ const PhysiologicalData: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-senda-border dark:divide-senda-darkborder">
-                {paginatedData.map((item, index) => {
+                {data.map((item, index) => {
                   const status = participantsStatusMap[item.participant_code] || 'ACTIVE';
                   return (
-                    <tr key={`${item.participant_code}-${index}`} className="cursor-pointer transition-all duration-200 hover:bg-senda-light/80 dark:hover:bg-senda-dark/50 hover:shadow-[inset_3px_0_0_0_theme(colors.senda-primary)] dark:hover:shadow-[inset_3px_0_0_0_theme(colors.senda-accent)]">
+                    <tr key={`${item.participant_code}-${item.variable_type}-${item.physical_time}-${index}`} className="cursor-pointer transition-all duration-200 hover:bg-senda-light/80 dark:hover:bg-senda-dark/50 hover:shadow-[inset_3px_0_0_0_theme(colors.senda-primary)] dark:hover:shadow-[inset_3px_0_0_0_theme(colors.senda-accent)]">
                       <td className="px-6 py-4 text-xs font-bold text-senda-main dark:text-white">{item.participant_code}</td>
                       <td className="px-6 py-4 text-xs">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-bold ${status === 'COMPLETED'
@@ -506,7 +548,7 @@ const PhysiologicalData: React.FC = () => {
           onPageChange={setCurrentPage}
         />
 
-        {filteredDataByStatus.length === 0 && !error && (
+        {data.length === 0 && !error && (
           <p className="py-12 text-center text-xs text-slate-400">{t('No Physiological Data')}</p>
         )}
         {error && (

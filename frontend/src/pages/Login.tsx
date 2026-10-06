@@ -349,16 +349,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
                 )}
               </button>
             </form>
-
-            {/* SECURITY NOTE */}
-            <div className="mt-4 flex items-center justify-center gap-1.5 border-t border-[#E3EBE5] pt-3 dark:border-[#293B30]">
-              <svg className="h-3.5 w-3.5 text-[#87938C] dark:text-[#7E9085]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <span className="text-[10px] text-[#87938C] dark:text-[#7E9085]">
-                {t('Secure access • GDPR compliance', { defaultValue: 'Secure access · GDPR compliance' })}
-              </span>
-            </div>
           </div>
         </div>
       </main>
@@ -366,7 +356,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToFront }) => {
       {/* FOOTER */}
       <footer className="relative z-10 py-3 text-center">
         <p className="text-[11px] text-[#5F6964] dark:text-[#99AD9E] sm:px-10 lg:px-14">
-          © {new Date().getFullYear()} {t('FooterText')}
+         {t('FooterRights')} 
         </p>
       </footer>
     </div>

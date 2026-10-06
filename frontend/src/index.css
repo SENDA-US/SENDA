@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   :root {
@@ -44,24 +44,40 @@
   --color-senda-input: var(--input-senda-dark);
   --color-senda-darktext: var(--text-senda-dark);
   --color-senda-darkborder: var(--border-senda-dark);
+
+  /* Registrando animaciones para usarlas con la clase "animate-*" */
+  --animate-brain-spin: brain-spin-3d 4s infinite;
+  --animate-senda-wave-1: sendaWave1 18s ease-in-out infinite alternate;
+  --animate-senda-wave-2: sendaWave2 24s ease-in-out infinite alternate;
+  --animate-senda-wave-3: sendaWave3 30s ease-in-out infinite alternate;
 }
 
-@utility senda-select {
-  @apply w-full appearance-none rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 pr-10 text-sm text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer;
-}
+@layer components {
+  .senda-select {
+    @apply w-full appearance-none rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 pr-10 text-sm text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer;
+  }
 
-@utility senda-pagination-btn {
-  @apply rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 py-2 text-[11px] font-bold text-senda-main dark:text-slate-300 transition hover:bg-senda-light dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer;
-}
+  .senda-pagination-btn {
+    @apply rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 py-2 text-[11px] font-bold text-senda-main dark:text-slate-300 transition hover:bg-senda-light dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer;
+  }
 
-@utility senda-stat-card {
-  @apply flex items-center gap-3 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-input/60 px-4 py-2.5 backdrop-blur-sm transition-all hover:border-senda-secondary/50 dark:hover:border-senda-accent/40;
+  .senda-stat-card {
+    @apply flex items-center gap-3 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-input/60 px-4 py-2.5 backdrop-blur-sm transition-all hover:border-senda-secondary/50 dark:hover:border-senda-accent/40;
+  }
 }
 
 @keyframes brain-spin-3d {
-  0%   { transform: rotateY(0deg) rotateX(4deg); }
-  50%  { transform: rotateY(180deg) rotateX(4deg); }
-  100% { transform: rotateY(360deg) rotateX(4deg); }
+  0% {
+    transform: rotateY(0deg) rotateX(4deg);
+  }
+
+  50% {
+    transform: rotateY(180deg) rotateX(4deg);
+  }
+
+  100% {
+    transform: rotateY(360deg) rotateX(4deg);
+  }
 }
 
 
@@ -130,8 +146,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .senda-wave {
-    animation: none;
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -164,10 +183,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
 /* En móvil, asegurar que no se desborde */
 @media (max-width: 640px) {
+
   input[type="datetime-local"],
   input[type="date"],
   input[type="time"] {
-    font-size: 16px; /* Evita el zoom automático en iOS */
+    font-size: 16px;
+    /* Evita el zoom automático en iOS */
     padding: 0.65rem 0.75rem;
   }
 }

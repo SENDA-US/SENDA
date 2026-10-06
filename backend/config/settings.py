@@ -12,18 +12,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
+from celery.schedules import crontab
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config("SECRET_KEY")
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG =config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS_STRING = config('ALLOWED_HOSTS', default='')
@@ -41,16 +35,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'google_health',
     'corsheaders'
-    #'django_crontab',
 ]
 
 CORS_ALLOWED_ORIGINS = [config('FRONTEND_URL'), ]
 
 CORS_ALLOW_CREDENTIALS = True
-
-CRONJOBS = [
-    ('0 9 * * *', 'django.core.management.call_command', ['sync_physiological_data'])
-]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -139,16 +128,23 @@ CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BEAT_SCHEDULE = {
     'sincronizar-datos-cada-5min': {
         'task': 'google_health.tasks.sync_all_users_data',
-        'schedule': 60.0, # 60 segundos = 1 minuto (actualización de datos fisiologicos)
+        'schedule': 300.0,
     },
 }
+
+# Protecciones de Celery
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TIME_LIMIT = 600
+CELERY_TASK_SOFT_TIME_LIMIT = 540
 
 
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST')
-EMAIL_PORT = config('EMAIL_PORT', cast=int)
-EMAIL_USE_SSL = config('EMAIL_USE_SSL', cast=bool, default=True)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool, default=False)
+EMAIL_PORT = config('EMAIL_PORT', cast=int, default=587)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', cast=bool, default=False)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool, default=True)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
