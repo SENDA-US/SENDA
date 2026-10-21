@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  :root {
+    --bg-senda-light: #FAFAF6;
+    --text-senda-main: #1B2A20;
+    --border-senda: #E4E4DC;
+    --green-primary: #1F5340;
+    --green-secondary: #2E6F52;
+    --green-light: #6FBE96;
+  }
+
+  .dark {
+    --bg-senda-dark: #0B120F;
+    --card-senda-dark: #16221C;
+    --input-senda-dark: #111814;
+    --text-senda-dark: #F3F4F6;
+    --border-senda-dark: #22382C;
+  }
+
+  body {
+    background-color: var(--bg-senda-light);
+    color: var(--text-senda-main);
+  }
+
+  .dark body {
+    background-color: var(--bg-senda-dark);
+    color: var(--text-senda-dark);
+  }
+}
+
+@theme {
+  --color-senda-light: var(--bg-senda-light);
+  --color-senda-main: var(--text-senda-main);
+  --color-senda-border: var(--border-senda);
+  --color-senda-primary: var(--green-primary);
+  --color-senda-secondary: var(--green-secondary);
+  --color-senda-accent: var(--green-light);
+
+  --color-senda-dark: var(--bg-senda-dark);
+  --color-senda-card: var(--card-senda-dark);
+  --color-senda-input: var(--input-senda-dark);
+  --color-senda-darktext: var(--text-senda-dark);
+  --color-senda-darkborder: var(--border-senda-dark);
+
+  /* Registrando animaciones para usarlas con la clase "animate-*" */
+  --animate-brain-spin: brain-spin-3d 4s infinite;
+  --animate-senda-wave-1: sendaWave1 18s ease-in-out infinite alternate;
+  --animate-senda-wave-2: sendaWave2 24s ease-in-out infinite alternate;
+  --animate-senda-wave-3: sendaWave3 30s ease-in-out infinite alternate;
+}
+
+@layer components {
+  .senda-select {
+    @apply w-full appearance-none rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light dark:bg-senda-dark px-4 py-3 pr-10 text-sm text-senda-main dark:text-white outline-none focus:border-senda-secondary cursor-pointer;
+  }
+
+  .senda-pagination-btn {
+    @apply rounded-xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-input px-3 py-2 text-[11px] font-bold text-senda-main dark:text-slate-300 transition hover:bg-senda-light dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer;
+  }
+
+  .senda-stat-card {
+    @apply flex items-center gap-3 rounded-2xl border border-senda-border dark:border-senda-darkborder bg-senda-light/60 dark:bg-senda-input/60 px-4 py-2.5 backdrop-blur-sm transition-all hover:border-senda-secondary/50 dark:hover:border-senda-accent/40;
+  }
+}
+
+@keyframes brain-spin-3d {
+  0% {
+    transform: rotateY(0deg) rotateX(4deg);
+  }
+
+  50% {
+    transform: rotateY(180deg) rotateX(4deg);
+  }
+
+  100% {
+    transform: rotateY(360deg) rotateX(4deg);
+  }
+}
+
+
+.senda-wave {
+  position: absolute;
+  width: 120%;
+  height: 75%;
+  left: -10%;
+  bottom: -5%;
+  transform-origin: center bottom;
+  will-change: transform;
+}
+
+.senda-wave-1 {
+  animation: sendaWave1 18s ease-in-out infinite alternate;
+}
+
+.senda-wave-2 {
+  animation: sendaWave2 24s ease-in-out infinite alternate;
+}
+
+.senda-wave-3 {
+  animation: sendaWave3 30s ease-in-out infinite alternate;
+}
+
+@keyframes sendaWave1 {
+  0% {
+    transform: translateX(-4%) translateY(2%) scale(1.02);
+  }
+
+  50% {
+    transform: translateX(3%) translateY(-2%) scale(1.05);
+  }
+
+  100% {
+    transform: translateX(-2%) translateY(1%) scale(1.03);
+  }
+}
+
+@keyframes sendaWave2 {
+  0% {
+    transform: translateX(3%) translateY(1%) scale(1.04);
+  }
+
+  50% {
+    transform: translateX(-4%) translateY(-3%) scale(1.08);
+  }
+
+  100% {
+    transform: translateX(2%) translateY(0%) scale(1.05);
+  }
+}
+
+@keyframes sendaWave3 {
+  0% {
+    transform: translateX(-2%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(4%) translateY(-2%);
+  }
+
+  100% {
+    transform: translateX(-3%) translateY(1%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* Estilos para inputs de fecha/hora */
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  min-height: 42px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* En móvil, asegurar que no se desborde */
+@media (max-width: 640px) {
+
+  input[type="datetime-local"],
+  input[type="date"],
+  input[type="time"] {
+    font-size: 16px;
+    /* Evita el zoom automático en iOS */
+    padding: 0.65rem 0.75rem;
+  }
+}
+
+/* Modo oscuro: hacer que el icono del calendario sea visible */
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}

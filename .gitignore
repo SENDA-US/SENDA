@@ -5,3 +5,14 @@ dist/
 __pycache__/
 *.sqlite3
 .vscode/
+.venv
+.env
+*.tar
+*.tar.gz
+frontend/.env
+backend/.env
+
+backend/celerybeat-schedule.*
+backend/celerybeat-schedule
+backend/celerybeat-schedule-shm
+backend/celerybeat-schedule-wal
