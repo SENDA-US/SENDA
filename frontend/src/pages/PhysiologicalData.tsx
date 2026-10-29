@@ -15,13 +15,11 @@ type PhysiologicalDataItem = {
 
 const VARIABLE_OPTIONS = [
   'SLEEP_DURATION', 'SLEEP_LIGHT', 'SLEEP_DEEP', 'SLEEP_REM',
-  'SLEEP_AWAKE', 'SLEEP_START', 'SLEEP_END', 'SLEEP_MINUTES_TO_FALL_ASLEEP',
-  'SLEEP_MINUTES_ASLEEP', 'SLEEP_AFTER_WAKE_UP',
+  'SLEEP_AWAKE', 'SLEEP_START', 'SLEEP_END', 'SLEEP_MINUTES_ASLEEP',
   'RESPIRATORY_RATE_NOCTURNAL', 'RESPIRATORY_RATE_LIGHT',
   'RESPIRATORY_RATE_DEEP', 'RESPIRATORY_RATE_REM',
   'HEART_RATE', 'HEART_RATE_RESTING', 'HRV_AVERAGE_MS', 'HRV_RMSSD',
   'HRV_NON_REM_HR', 'HRV_ENTROPY',
-  'HR_ZONE_FAT_BURN', 'HR_ZONE_CARDIO', 'HR_ZONE_PEAK',
   'STEPS', 'DISTANCE'
 ];
 
@@ -523,7 +521,6 @@ const PhysiologicalData: React.FC = () => {
                           const val = item.metric_value;
 
                           if (v.startsWith('SLEEP_') && v !== 'SLEEP_START' && v !== 'SLEEP_END') return `${val} ${t('unit_min')}`;
-                          if (v.includes('ZONE') || v === 'ACTIVE_ZONE_MINUTES') return `${val} ${t('unit_min')}`;
                           if (v === 'HEART_RATE' || v === 'HEART_RATE_RESTING' || v === 'HRV_NON_REM_HR') return `${val} ${t('unit_bpm')}`;
                           if (v.startsWith('RESPIRATORY_RATE_')) return `${val} ${t('unit_resp')}`;
                           if (v === 'HRV_AVERAGE_MS' || v === 'HRV_RMSSD') return `${val} ${t('unit_ms')}`;
