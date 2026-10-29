@@ -30,6 +30,8 @@ const Assignments: React.FC = () => {
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+
   const [sortField, setSortField] = useState<SortField>('participant');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -232,7 +234,16 @@ const Assignments: React.FC = () => {
       const statusStr = item.status ? item.status.toLowerCase() : '';
       const searchLower = query.toLowerCase();
 
-      return pCode.includes(searchLower) || fCode.includes(searchLower) || statusStr.includes(searchLower);
+      const matchesQuery =
+        pCode.includes(searchLower) ||
+        fCode.includes(searchLower) ||
+        statusStr.includes(searchLower);
+
+      const matchesType =
+        typeFilter === 'ALL' ||
+        getParticipantCode(item).toUpperCase().startsWith(typeFilter.toUpperCase());
+
+      return matchesQuery && matchesType;
     })
     .sort((a, b) => {
       const codeA = getParticipantCode(a);
@@ -307,6 +318,30 @@ const Assignments: React.FC = () => {
       />
 
       <div className="rounded-3xl border border-senda-border dark:border-senda-darkborder bg-white dark:bg-senda-card p-6 shadow-xl space-y-6 transition-colors duration-300">
+
+        {/* NUEVO: Pestañas de filtrado rápido (All, Senda, Piloto) */}
+        <div className="flex items-center gap-2 border-b border-senda-border dark:border-senda-darkborder pb-4">
+          {[
+            { label: t('All'), value: 'ALL' },
+            { label: 'SENDA', value: 'SENDA' },
+            { label: 'PILOTO', value: 'PILOTO' }
+          ].map((tab) => {
+            const isActive = typeFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => { setTypeFilter(tab.value); setCurrentPage(1); }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${isActive
+                  ? 'bg-senda-primary dark:bg-senda-accent text-white dark:text-senda-dark shadow-sm'
+                  : 'bg-senda-light dark:bg-senda-input text-[#6B6F66] dark:text-[#9AA093] hover:bg-green-[#A5B8A5] dark:hover:bg-slate-700'
+                  }`}
+              >
+                {t(tab.label)}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-slate-400">

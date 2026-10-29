@@ -39,9 +39,7 @@ class VariableType(models.TextChoices):
     SLEEP_AWAKE = 'SLEEP_AWAKE', 'Tiempo despierto durante el periodo de sueño'
     SLEEP_START = 'SLEEP_START', 'Hora de inicio del sueño'
     SLEEP_END = 'SLEEP_END', 'Hora de finalización del sueño'
-    SLEEP_MINUTES_TO_FALL_ASLEEP = 'SLEEP_MINUTES_TO_FALL_ASLEEP', 'Minutos hasta que te duermes'
     SLEEP_MINUTES_ASLEEP = 'SLEEP_MINUTES_ASLEEP', 'Minutos reales dormidos'
-    SLEEP_AFTER_WAKE_UP = 'SLEEP_AFTER_WAKE_UP', 'Minutos despierto tras levantarse'
 
     # FRECUENCIA RESPIRATORIA 
     RESPIRATORY_RATE_NOCTURNAL = 'RESPIRATORY_RATE_NOCTURNAL', 'Frecuencia respiratoria global (respiraciones/min)'
@@ -57,11 +55,7 @@ class VariableType(models.TextChoices):
     HRV_NON_REM_HR = 'HRV_NON_REM_HR', 'Frecuencia cardíaca en sueño no-REM (bpm)'
     HRV_ENTROPY = 'HRV_ENTROPY', 'Entropía de la variabilidad cardíaca'
 
-    # ACTIVIDAD Y ZONAS CARDÍACAS 
-    HR_ZONE_FAT_BURN = 'HR_ZONE_FAT_BURN', 'Minutos en zona de quema de grasa'
-    HR_ZONE_CARDIO = 'HR_ZONE_CARDIO', 'Minutos en zona cardio'
-    HR_ZONE_PEAK = 'HR_ZONE_PEAK', 'Minutos en zona pico'
-    ACTIVE_ZONE_MINUTES = 'ACTIVE_ZONE_MINUTES', 'Minutos activos (Active Zone Minutes)'
+    # PASOS Y DISTANCIA
     STEPS = 'STEPS', 'Pasos'
     DISTANCE = 'DISTANCE', 'Distancia'
 
@@ -135,6 +129,12 @@ ALERT_CATALOG = {
         'email_message': 'Por favor, recuerde no quitarse la pulsera a lo largo del día.',
         'priority': AlertPriority.MEDIUM,
     },
+}
+
+ALERTS_NOT_NOTIFIED_TO_PARTICIPANT = {
+    AlertType.TOKEN_EXPIRED,
+    AlertType.DEVICE_UNLINKED,
+    AlertType.NO_RECORDS,
 }
 
 
@@ -574,7 +574,11 @@ def send_alert_notification_emails(alert):
     # ==========================================================
     # 1) CORREO AL PARTICIPANTE
     # ==========================================================
-    if participant_email:
+    send_to_participant = (
+        participant_email and alert.alert_type not in ALERTS_NOT_NOTIFIED_TO_PARTICIPANT
+    )
+
+    if send_to_participant:
         subject_p = f"[SENDA] Acción requerida: {alert.get_alert_type_display()}"
 
         text_participant = (
@@ -629,6 +633,11 @@ def send_alert_notification_emails(alert):
             import traceback
             print(f"[ALERT_EMAIL] ❌ Error enviando al participante {participant_email}: {e}")
             traceback.print_exc()
+    elif participant_email and alert.alert_type in ALERTS_NOT_NOTIFIED_TO_PARTICIPANT:
+        print(
+            f"[ALERT_EMAIL] ℹ️  Alerta {alert.alert_type} NO se envía al participante "
+            f"(solo investigadores). Motivo: requiere intervención del equipo."
+        )
 
     # ==========================================================
     # 2) CORREO A INVESTIGADORES

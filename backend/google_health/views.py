@@ -1184,31 +1184,31 @@ def api_resolve_alert(request, alert_id):
             status=404
         )
 
-
 # =========================================================
 # Tamaño de bloque para downsampling de HEART_RATE
 # =========================================================
-def _pick_hr_block(date_from, date_to):
-    """
-    Devuelve el tamaño del bloque (en minutos) para agrupar HEART_RATE
-    según el rango temporal solicitado.
-    """
-    if not (date_from and date_to):
-        return 60        # sin fechas → 1 hora
-    try:
-        d1 = datetime.fromisoformat(date_from).date()
-        d2 = datetime.fromisoformat(date_to).date()
-    except ValueError:
-        return 60
+# def _pick_hr_block(date_from, date_to):
+#     """
+#     Devuelve el tamaño del bloque (en minutos) para agrupar HEART_RATE
+#     según el rango temporal solicitado.
+#     """
+#     if not (date_from and date_to):
+#         return 60        # sin fechas → 1 hora
+#     try:
+#         d1 = datetime.fromisoformat(date_from).date()
+#         d2 = datetime.fromisoformat(date_to).date()
+#     except ValueError:
+#         return 60
 
-    dias = max((d2 - d1).days, 1)
-    if dias <= 1:
-        return 1         # 1 día → minuto
-    if dias <= 7:
-        return 5         # 1 semana → 5 min
-    if dias <= 30:
-        return 15        # 1 mes → 15 min
-    return 60            # más → 1 hora
+#     dias = max((d2 - d1).days, 1)
+#     if dias <= 1:
+#         return 1         # 1 día → minuto
+#     if dias <= 7:
+#         return 5         # 1 semana → 5 min
+#     if dias <= 30:
+#         return 15        # 1 mes → 15 min
+#     return 60            # más → 1 hora
+
 
 
 @csrf_exempt
@@ -1251,8 +1251,6 @@ def api_export_physiological_data(request):
                 'assignment__fitbit'
             )
         )
-
-        hr_block = _pick_hr_block(date_from, date_to)
 
         # -----------------------------------------------------
         # FILTRO PARTICIPANTE
@@ -1385,9 +1383,6 @@ def api_export_physiological_data(request):
 
             local_time = item.physical_time.astimezone(local_tz)
             time_key = local_time.replace(microsecond=0)
-            if item.variable_type == 'HEART_RATE' and hr_block > 1:
-                bucket_min = (time_key.minute // hr_block) * hr_block
-                time_key = time_key.replace(minute=bucket_min)
 
             # -------------------------------------------------
             # CLAVE DE LA FILA
